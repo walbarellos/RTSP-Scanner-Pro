@@ -1,0 +1,593 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-mono, monospace); background: transparent; }
+
+  .dashboard {
+    padding: 1rem 0;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .topbar-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .badge-scanning { background: #faeeda; color: #854f0b; }
+  .badge-done     { background: #eaf3de; color: #3b6d11; }
+  .badge-idle     { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn {
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn-danger { border-color: #a32d2d; color: #a32d2d; }
+  .btn-danger:hover { background: #fcebeb; }
+  .btn-primary { border-color: #185fa5; color: #185fa5; }
+  .btn-primary:hover { background: #e6f1fb; }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+
+  .stat-card {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 14px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .stat-val {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  .stat-val.s-ok   { color: #3b6d11; }
+  .stat-val.s-warn { color: #854f0b; }
+  .stat-val.s-fail { color: #a32d2d; }
+  .stat-val.s-blue { color: #185fa5; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 10px;
+  }
+
+  .cam-card {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-background-primary);
+    overflow: hidden;
+    position: relative;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .cam-card.dying {
+    opacity: 0;
+    transform: scale(0.92);
+    pointer-events: none;
+  }
+
+  .cam-screen {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #0a0a0a;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .cam-screen canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .cam-overlay-tl,
+  .cam-overlay-tr,
+  .cam-overlay-bl,
+  .cam-overlay-br {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    z-index: 3;
+  }
+  .cam-overlay-tl { top: 6px; left: 6px;  border-top: 2px solid; border-left: 2px solid;  border-radius: 3px 0 0 0; }
+  .cam-overlay-tr { top: 6px; right: 6px; border-top: 2px solid; border-right: 2px solid; border-radius: 0 3px 0 0; }
+  .cam-overlay-bl { bottom: 6px; left: 6px;  border-bottom: 2px solid; border-left: 2px solid;  border-radius: 0 0 0 3px; }
+  .cam-overlay-br { bottom: 6px; right: 6px; border-bottom: 2px solid; border-right: 2px solid; border-radius: 0 0 3px 0; }
+
+  .status-scanning .cam-overlay-tl,
+  .status-scanning .cam-overlay-tr,
+  .status-scanning .cam-overlay-bl,
+  .status-scanning .cam-overlay-br { border-color: #ef9f27; }
+
+  .status-handshake .cam-overlay-tl,
+  .status-handshake .cam-overlay-tr,
+  .status-handshake .cam-overlay-bl,
+  .status-handshake .cam-overlay-br { border-color: #378add; }
+
+  .status-open .cam-overlay-tl,
+  .status-open .cam-overlay-tr,
+  .status-open .cam-overlay-bl,
+  .status-open .cam-overlay-br { border-color: #639922; }
+
+  .status-auth .cam-overlay-tl,
+  .status-auth .cam-overlay-tr,
+  .status-auth .cam-overlay-bl,
+  .status-auth .cam-overlay-br { border-color: #d4537e; }
+
+  .status-failed .cam-overlay-tl,
+  .status-failed .cam-overlay-tr,
+  .status-failed .cam-overlay-bl,
+  .status-failed .cam-overlay-br { border-color: #e24b4a; }
+
+  .cam-status-dot {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    z-index: 4;
+    padding: 2px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .status-scanning  .cam-status-dot { background: rgba(186,117,23,0.85); color: #fff; }
+  .status-handshake .cam-status-dot { background: rgba(24,95,165,0.85); color: #fff; }
+  .status-open      .cam-status-dot { background: rgba(59,109,17,0.85); color: #fff; }
+  .status-auth      .cam-status-dot { background: rgba(153,53,86,0.85); color: #fff; }
+  .status-failed    .cam-status-dot { background: rgba(163,45,45,0.85); color: #fff; }
+
+  .cam-body {
+    padding: 8px 10px;
+  }
+
+  .cam-ip {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    letter-spacing: 0.04em;
+  }
+
+  .cam-meta {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+    min-height: 14px;
+  }
+
+  .cam-log {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    margin-top: 6px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    padding-top: 6px;
+    min-height: 28px;
+    line-height: 1.5;
+    font-family: var(--font-mono, monospace);
+  }
+
+  .cam-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px 8px;
+    margin-top: 2px;
+  }
+
+  .cam-rtsp {
+    font-size: 10px;
+    color: #185fa5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+  }
+
+  .btn-kill {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-size: 16px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+  }
+  .btn-kill:hover { color: #a32d2d; background: #fcebeb; }
+
+  .scanline {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(55,138,221,0.6), transparent);
+    z-index: 2;
+    pointer-events: none;
+    animation: scan 2s linear infinite;
+  }
+  .status-scanning .scanline { display: block; }
+  .status-handshake .scanline { display: block; background: linear-gradient(90deg, transparent, rgba(55,138,221,0.8), transparent); }
+  .status-open .scanline, .status-auth .scanline, .status-failed .scanline { display: none; }
+
+  @keyframes scan {
+    0%   { top: 0%; }
+    100% { top: 100%; }
+  }
+
+  .log-panel {
+    margin-top: 1rem;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    padding: 8px 12px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+  }
+
+  .log-entry { display: flex; gap: 10px; }
+  .log-ts  { color: var(--color-text-tertiary); flex-shrink: 0; }
+  .log-ok   { color: #639922; }
+  .log-warn { color: #854f0b; }
+  .log-fail { color: #a32d2d; }
+  .log-info { color: #185fa5; }
+
+  .pulse {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    animation: blink 1s step-start infinite;
+  }
+  .pulse-amber { background: #ef9f27; }
+  .pulse-blue  { background: #378add; }
+  .pulse-green { background: #639922; }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .empty-state {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 3rem 0;
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+  }
+</style>
+
+<div class="dashboard">
+  <h2 class="sr-only">RTSP Camera Grid — handshake status dashboard for LAN cameras</h2>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-title"><i class="ti ti-camera" aria-hidden="true"></i> RTSP Grid</span>
+      <span class="badge badge-idle" id="scan-badge">IDLE</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary" onclick="startDemo()">
+        <i class="ti ti-player-play" aria-hidden="true"></i> Simular scan
+      </button>
+      <button class="btn btn-danger" onclick="killAll()">
+        <i class="ti ti-trash" aria-hidden="true"></i> Destruir todos
+      </button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Detectadas</div>
+      <div class="stat-val s-blue" id="st-detected">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Handshake OK</div>
+      <div class="stat-val s-ok" id="st-ok">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Senha padrão</div>
+      <div class="stat-val s-warn" id="st-auth">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Falhou</div>
+      <div class="stat-val s-fail" id="st-fail">0</div>
+    </div>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="empty-state" id="empty">
+      Nenhuma câmera detectada. Clique em "Simular scan" para iniciar.
+    </div>
+  </div>
+
+  <div class="log-panel" id="log-panel"></div>
+</div>
+
+<script>
+const CAMERAS_DEMO = [
+  { ip:"192.168.1.50", vendor:"Hikvision",  path:"/Streaming/Channels/101", result:"open",     codec:"H.264",    cred:null },
+  { ip:"192.168.1.51", vendor:"Dahua",      path:"/cam/realmonitor",         result:"auth",     codec:"H.265",    cred:{u:"admin",p:"admin"} },
+  { ip:"192.168.1.52", vendor:"Axis",       path:"/axis-media/media.amp",    result:"open",     codec:"H.264",    cred:null },
+  { ip:"192.168.1.53", vendor:"Foscam",     path:"/videoMain",               result:"auth",     codec:"MJPEG",    cred:{u:"admin",p:"12345"} },
+  { ip:"192.168.1.78", vendor:"Genérico",   path:"/live",                    result:"failed",   codec:null,       cred:null },
+  { ip:"192.168.1.80", vendor:"Reolink",    path:"/h264Preview_01_main",     result:"open",     codec:"H.264",    cred:null },
+  { ip:"192.168.1.99", vendor:"TP-Link",    path:"/stream1",                 result:"auth",     codec:"H.264",    cred:{u:"root",p:""} },
+  { ip:"192.168.1.104",vendor:"Genérico",   path:"/",                        result:"failed",   codec:null,       cred:null },
+];
+
+let cards = {};
+let stats = { detected:0, ok:0, auth:0, fail:0 };
+let running = false;
+
+function ts() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+
+function addLog(msg, type='info') {
+  const panel = document.getElementById('log-panel');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-${type}">${msg}</span>`;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function updateStats() {
+  document.getElementById('st-detected').textContent = stats.detected;
+  document.getElementById('st-ok').textContent       = stats.ok;
+  document.getElementById('st-auth').textContent     = stats.auth;
+  document.getElementById('st-fail').textContent     = stats.fail;
+}
+
+function drawNoise(canvas, status) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.offsetWidth || 190;
+  const h = canvas.height = canvas.offsetHeight || 107;
+
+  if (status === 'failed') {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0,0,w,h);
+    for (let i=0; i<800; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.15})`;
+      ctx.fillRect(Math.random()*w, Math.random()*h, 1, 1);
+    }
+    return;
+  }
+
+  if (status === 'open' || status === 'auth') {
+    ctx.fillStyle = '#0d1a0a';
+    ctx.fillRect(0,0,w,h);
+    const rows = 6, cols = 8;
+    const cw = w/cols, ch = h/rows;
+    for (let r=0; r<rows; r++) {
+      for (let c=0; c<cols; c++) {
+        const v = 20 + Math.floor(Math.random()*60);
+        ctx.fillStyle = `rgb(${v*0.3},${v},${v*0.2})`;
+        ctx.fillRect(c*cw, r*ch, cw-1, ch-1);
+      }
+    }
+    ctx.fillStyle = 'rgba(0,40,0,0.3)';
+    ctx.fillRect(0,0,w,h);
+    return;
+  }
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0,0,w,h);
+  for (let i=0; i<400; i++) {
+    const alpha = Math.random()*0.08;
+    ctx.fillStyle = `rgba(55,138,221,${alpha})`;
+    ctx.fillRect(Math.random()*w, Math.random()*h, Math.random()*3+1, 1);
+  }
+}
+
+function createCard(cam) {
+  document.getElementById('empty').style.display = 'none';
+  const grid = document.getElementById('grid');
+  const card = document.createElement('div');
+  card.className = 'cam-card status-scanning';
+  card.id = `card-${cam.ip.replace(/\./g,'-')}`;
+  card.innerHTML = `
+    <div class="cam-screen">
+      <canvas></canvas>
+      <div class="scanline"></div>
+      <div class="cam-overlay-tl"></div>
+      <div class="cam-overlay-tr"></div>
+      <div class="cam-overlay-bl"></div>
+      <div class="cam-overlay-br"></div>
+      <div class="cam-status-dot"><span class="pulse pulse-amber"></span>SCANNING</div>
+    </div>
+    <div class="cam-body">
+      <div class="cam-ip">${cam.ip}</div>
+      <div class="cam-meta">${cam.vendor}</div>
+      <div class="cam-log">→ porta 554/TCP detectada</div>
+    </div>
+    <div class="cam-footer">
+      <span class="cam-rtsp">rtsp://${cam.ip}:554${cam.path}</span>
+      <button class="btn-kill" onclick="killCard('${cam.ip}')" title="Destruir card" aria-label="Destruir card desta câmera"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+  `;
+  grid.appendChild(card);
+  cards[cam.ip] = card;
+
+  const canvas = card.querySelector('canvas');
+  drawNoise(canvas, 'scanning');
+
+  stats.detected++;
+  updateStats();
+}
+
+function setHandshake(cam) {
+  const card = cards[cam.ip];
+  if (!card) return;
+  card.className = 'cam-card status-handshake';
+  card.querySelector('.cam-status-dot').innerHTML = `<span class="pulse pulse-blue"></span>HANDSHAKE`;
+  card.querySelector('.cam-log').textContent = `→ OPTIONS rtsp://${cam.ip}:554${cam.path}`;
+  drawNoise(card.querySelector('canvas'), 'handshake');
+}
+
+function setResult(cam) {
+  const card = cards[cam.ip];
+  if (!card) return;
+
+  if (cam.result === 'failed') {
+    card.className = 'cam-card status-failed';
+    card.querySelector('.cam-status-dot').innerHTML = `TIMEOUT`;
+    card.querySelector('.cam-log').textContent = `✗ DESCRIBE → sem resposta`;
+    drawNoise(card.querySelector('canvas'), 'failed');
+    stats.fail++;
+    addLog(`${cam.ip} — handshake falhou (timeout)`, 'fail');
+    setTimeout(() => killCard(cam.ip), 3200);
+  } else if (cam.result === 'open') {
+    card.className = 'cam-card status-open';
+    card.querySelector('.cam-status-dot').innerHTML = `200 OK`;
+    card.querySelector('.cam-meta').textContent = `${cam.vendor} · ${cam.codec}`;
+    card.querySelector('.cam-log').textContent = `← RTSP/1.0 200 OK · SDP: ${cam.codec}/90000`;
+    drawNoise(card.querySelector('canvas'), 'open');
+    stats.ok++;
+    addLog(`${cam.ip} — stream aberto sem senha · ${cam.codec}`, 'ok');
+    animateCanvas(card.querySelector('canvas'), 'open');
+  } else if (cam.result === 'auth') {
+    card.className = 'cam-card status-auth';
+    card.querySelector('.cam-status-dot').innerHTML = `401→200`;
+    card.querySelector('.cam-meta').textContent = `${cam.vendor} · ${cam.codec} · ${cam.cred.u}:${cam.cred.p||'(vazio)'}`;
+    card.querySelector('.cam-log').textContent = `← 401 → credential stuffing → ${cam.cred.u}:${cam.cred.p||'""'} OK`;
+    drawNoise(card.querySelector('canvas'), 'open');
+    stats.auth++;
+    addLog(`${cam.ip} — senha padrão aceita: ${cam.cred.u}:${cam.cred.p||'""'} · ${cam.codec}`, 'warn');
+    animateCanvas(card.querySelector('canvas'), 'auth');
+  }
+
+  updateStats();
+}
+
+function animateCanvas(canvas, type) {
+  let frame = 0;
+  const interval = setInterval(() => {
+    if (!canvas.isConnected) { clearInterval(interval); return; }
+    drawNoise(canvas, type);
+    if (frame++ > 60) clearInterval(interval);
+  }, 200);
+}
+
+function killCard(ip) {
+  const card = cards[ip];
+  if (!card) return;
+  card.classList.add('dying');
+  setTimeout(() => {
+    card.remove();
+    delete cards[ip];
+    checkEmpty();
+  }, 320);
+}
+
+function killAll() {
+  Object.keys(cards).forEach(ip => killCard(ip));
+  stats = { detected:0, ok:0, auth:0, fail:0 };
+  updateStats();
+  running = false;
+  document.getElementById('scan-badge').textContent = 'IDLE';
+  document.getElementById('scan-badge').className = 'badge badge-idle';
+  addLog('Todos os cards destruídos.', 'fail');
+}
+
+function checkEmpty() {
+  if (Object.keys(cards).length === 0) {
+    document.getElementById('empty').style.display = '';
+  }
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function startDemo() {
+  if (running) return;
+  running = true;
+  stats = { detected:0, ok:0, auth:0, fail:0 };
+  updateStats();
+
+  Object.keys(cards).forEach(ip => { const c=cards[ip]; if(c) c.remove(); });
+  cards = {};
+  document.getElementById('log-panel').innerHTML = '';
+
+  const badge = document.getElementById('scan-badge');
+  badge.textContent = 'SCANNING';
+  badge.className = 'badge badge-scanning';
+  addLog('Iniciando scan 192.168.1.0/24 — porta 554/TCP — 64 threads', 'info');
+
+  for (const cam of CAMERAS_DEMO) {
+    await delay(420);
+    addLog(`${cam.ip} — porta 554 aberta`, 'info');
+    createCard(cam);
+
+    await delay(600);
+    addLog(`${cam.ip} — enviando OPTIONS + DESCRIBE`, 'info');
+    setHandshake(cam);
+
+    await delay(900 + Math.random()*400);
+    setResult(cam);
+  }
+
+  badge.textContent = 'CONCLUÍDO';
+  badge.className = 'badge badge-done';
+  running = false;
+  addLog(`Scan concluído — ${stats.ok} aberto · ${stats.auth} senha padrão · ${stats.fail} falhou`, 'ok');
+}
+</script>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RTSP Intelligence v3.0 - Visual Recon</title>
+    <style>
+        body { background: #050505; color: #00ff00; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 1400px; margin: 0 auto; border: 1px solid #00ff00; padding: 20px; background: #0a0a0a; box-shadow: 0 0 30px rgba(0, 255, 0, 0.1); }
+        .layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+        
+        /* Sidebar */
+        .sidebar { background: #111; padding: 15px; border: 1px solid #222; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: #000; padding: 10px; border: 1px solid #333; text-align: center; }
+        .stat-num { display: block; font-size: 1.6em; color: #fff; font-weight: bold; }
+        .stat-label { font-size: 0.7em; color: #666; text-transform: uppercase; }
+
+        #log { height: 300px; overflow-y: auto; background: #000; padding: 10px; font-size: 0.7em; border: 1px solid #222; color: #888; margin-top: 15px; }
+        .log-entry { border-bottom: 1px solid #111; margin-bottom: 2px; }
+
+        /* Gallery */
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; align-content: start; }
+        .cam-card { background: #111; border: 2px solid #222; border-radius: 4px; overflow: hidden; position: relative; transition: 0.3s; }
+        .cam-card.confirmed { border-color: #00ff00; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
+        .cam-preview { height: 180px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; }
+        .cam-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .cam-overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 2px 8px; font-size: 0.7em; color: #00ff00; }
+        
+        .cam-info { padding: 12px; font-size: 0.8em; }
+        .cam-ip { font-size: 1.2em; font-weight: bold; color: #fff; margin-bottom: 5px; }
+        .cam-meta { color: #666; font-size: 0.8em; margin-bottom: 8px; }
+        .btn-live { display: block; width: 100%; background: #00ff00; color: #000; text-align: center; padding: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        
+        .loading-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        
+        button { width: 100%; margin-bottom: 10px; padding: 12px; font-weight: bold; cursor: pointer; text-transform: uppercase; border: none; }
+        .btn-start { background: #00ff00; color: #000; }
+        .btn-skip { background: #4af; color: #000; }
+        .btn-stop { background: #ff4444; color: #000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">📡 GLOBAL RECON v3.0</h1>
+        
+        <div class="layout">
+            <div class="sidebar">
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <span id="scanned" class="stat-num">0</span>
+                        <span class="stat-label">Scanned</span>
+                    </div>
+                    <div class="stat-card" style="border-color: #00ff00;">
+                        <span id="confirmed" class="stat-num" style="color: #00ff00;">0</span>
+                        <span class="stat-label">LIVE CAMS</span>
+                    </div>
+                </div>
+
+                <div class="stat-card" style="margin-bottom: 20px;">
+                    <span id="target" class="stat-num" style="font-size: 1em;">IDLE</span>
+                    <span id="target-info" class="stat-label">Awaiting Command</span>
+                </div>
+
+                <button class="btn-start" onclick="start()">Start / Attach Scan</button>
+                <button class="btn-skip" onclick="skip()">Skip Network</button>
+                <button class="btn-stop" onclick="stop()">Emergency Stop</button>
+
+                <div id="log"></div>
+            </div>
+
+            <div class="gallery" id="gallery">
+                <!-- Cams go here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const found = new Set();
+        function log(msg) {
+            const e = document.createElement('div');
+            e.className = 'log-entry';
+            e.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            const container = document.getElementById('log');
+            container.prepend(e);
+            if(container.children.length > 100) container.lastChild.remove();
+        }
+
+        function addHW(data) {
+            if(found.has(data.ip)) return;
+            found.add(data.ip);
+            const card = document.createElement('div');
+            card.id = `cam-${data.ip.replace(/\./g, '-')}`;
+            card.className = 'cam-card';
+            card.innerHTML = `
+                <div class="cam-preview">
+                    <div class="cam-overlay">HW DETECTED</div>
+                    <button onclick="removeCard('${data.ip}')" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; font-size:12px; line-height:20px; padding:0; z-index:10;">&times;</button>
+                    <span class="loading-pulse">ANALYZING PATHS...</span>
+                </div>
+                <div class="cam-info">
+                    <div class="cam-ip">${data.ip}</div>
+                    <div class="cam-meta">${data.rir} | ${data.cc}</div>
+                    <div style="font-size:0.7em; color:#444; height:30px; overflow:hidden;">${data.banner}</div>
+                </div>
+            `;
+            document.getElementById('gallery').prepend(card);
+        }
+
+        function removeCard(ip) {
+            const card = document.getElementById(`cam-${ip.replace(/\./g, '-')}`);
+            if(card) {
+                // If it contains an image, stopping the stream is handled by the browser when element is removed
+                card.remove();
+                found.delete(ip);
+            }
+        }
+
+        function confirmCam(data) {
+            const card = document.getElementById(`cam-${data.ip.replace(/\./g, '-')}`);
+            if(!card) return;
+            card.className = 'cam-card confirmed';
+            card.innerHTML = `
+                <div class="cam-preview">
+                    <div class="cam-overlay" style="background:#00ff00; color:#000;">LIVE FEED</div>
+                    <button onclick="removeCard('${data.ip}')" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; font-size:12px; line-height:20px; padding:0; z-index:10;">&times;</button>
+                    <img src="/api/live?url=${encodeURIComponent(data.url)}" onerror="this.parentElement.innerHTML='<small>STREAM ERROR</small>'">
+                </div>
+                <div class="cam-info">
+                    <div class="cam-ip">${data.ip}</div>
+                    <div class="cam-meta">${data.rir} | ${data.cc}</div>
+                    <a href="/api/live?url=${encodeURIComponent(data.url)}" target="_blank" class="btn-live">OPEN FULLSCREEN</a>
+                </div>
+            `;
+            log(`✨ VISUAL SUCCESS: ${data.ip}`);
+        }
+
+        async function skip() { await fetch('/api/scan/rir/skip', {method:'POST'}); log('Skip transmitted.'); }
+        async function stop() { if(confirm('Abort?')) await fetch('/api/scan/rir/stop', {method:'POST'}); }
+
+        function start() {
+            const es = new EventSource('/api/scan/rir');
+            es.addEventListener('status', e => log(JSON.parse(e.data).msg));
+            es.addEventListener('network', e => {
+                const d = JSON.parse(e.data);
+                document.getElementById('target').innerText = d.net;
+                document.getElementById('target-info').innerText = `${d.rir} | ${d.cc}`;
+            });
+            es.addEventListener('found_hw', e => addHW(JSON.parse(e.data)));
+            es.addEventListener('confirmed', e => confirmCam(JSON.parse(e.data)));
+            es.addEventListener('progress', e => {
+                const d = JSON.parse(e.data);
+                document.getElementById('scanned').innerText = d.scanned.toLocaleString();
+                document.getElementById('confirmed').innerText = d.confirmed;
+            });
+            es.addEventListener('failed_probe', e => {
+                const d = JSON.parse(e.data);
+                const card = document.getElementById(`cam-${d.ip.replace(/\./g, '-')}`);
+                if(card && !card.classList.contains('confirmed')) card.remove();
+            });
+            es.onerror = () => { es.close(); log('Link lost. Re-attach to resume.'); };
+        }
+    </script>
+</body>
+</html>
