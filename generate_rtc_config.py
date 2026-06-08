@@ -12,9 +12,12 @@ def generate_config():
 
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
-    # Pega apenas as câmeras abertas e confirmadas
-    rows = con.execute("SELECT ip, cc, working_url FROM results WHERE status='open'").fetchall()
+    # Pega APENAS as câmeras favoritadas (Mission Book)
+    rows = con.execute("SELECT ip, cc, working_url, codec FROM results WHERE bookmarked=1").fetchall()
     con.close()
+
+    if not rows:
+        print("[!] Nenhuma câmera favoritada encontrada. O Mission Wall estará vazio.")
 
     streams = {}
     for r in rows:

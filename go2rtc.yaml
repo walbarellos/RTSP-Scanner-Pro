@@ -1,0 +1,36 @@
+ffmpeg:
+  bin: ffmpeg
+  global: -hwaccel cuda -hwaccel_output_format cuda
+streams:
+  AR_186_182_59_35:
+  - rtsp://186.182.59.35:554/track1
+  - ffmpeg:rtsp://186.182.59.35:554/track1#video=h264
+  BR_170_80_55_25:
+  - rtsp://admin:admin@170.80.55.25:554/cam/realmonitor?channel=1&subtype=0
+  - ffmpeg:rtsp://admin:admin@170.80.55.25:554/cam/realmonitor?channel=1&subtype=0#video=h264
+  BR_179_247_250_136:
+  - rtsp://admin:admin@179.247.250.136:554/cam/realmonitor?channel=1&subtype=0
+  - ffmpeg:rtsp://admin:admin@179.247.250.136:554/cam/realmonitor?channel=1&subtype=0#video=h264
+  BR_200_160_84_101:
+  - rtsp://admin:admin@200.160.84.101:554/cam/realmonitor?channel=1&subtype=0
+  - ffmpeg:rtsp://admin:admin@200.160.84.101:554/cam/realmonitor?channel=1&subtype=0#video=h264
+  CA_45_42_39_242:
+  - rtsp://user:user@45.42.39.242:554/cam/realmonitor?channel=1&subtype=0
+  - ffmpeg:rtsp://user:user@45.42.39.242:554/cam/realmonitor?channel=1&subtype=0#video=h264
+  KR_222_104_215_56:
+  - rtsp://admin:admin@222.104.215.56:554
+  - ffmpeg:rtsp://admin:admin@222.104.215.56:554#video=h264
+  USER_109_109_54_5:
+  - rtsp://admin:admin@109.109.54.5:554
+  - ffmpeg:rtsp://admin:admin@109.109.54.5:554#video=h264
+  USER_109_203_192_41:
+  - rtsp://admin:12345@109.203.192.41:554
+  - ffmpeg:rtsp://admin:12345@109.203.192.41:554#video=h264
+  USER_111_91_151_71:
+  - rtsp://admin:admin@111.91.151.71:554
+  - ffmpeg:rtsp://admin:admin@111.91.151.71:554#video=hevc
+  USER_114_141_35_253:
+  - rtsp://admin:@114.141.35.253:554
+  - ffmpeg:rtsp://admin:@114.141.35.253:554#video=hevc
+  USER_31_40_113_130:
+  - rtsp://31.40.113.130:554/

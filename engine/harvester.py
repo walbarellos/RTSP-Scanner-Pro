@@ -32,7 +32,7 @@ def fragment_network(net_str, target_prefix=20):
         return []
 
 async def fetch_all_feeds(broadcast_callback=None):
-    """Sync feeds from RIRs concurrently and yield targets as they are ingested."""
+    """Sync feeds from RIRs concurrently and yield targets as soon as each RIR is ready."""
     loop = asyncio.get_running_loop()
 
     def _parse_rir_content(rir, text):
@@ -42,7 +42,7 @@ async def fetch_all_feeds(broadcast_callback=None):
             p = line.split("|")
             if len(p) < 7 or p[3] == "*": continue
             cc = p[1]
-            if cc == "US": continue # Exclude USA
+            if cc == "US": continue 
             try:
                 count = int(p[4])
                 if count < 1: continue
@@ -50,23 +50,22 @@ async def fetch_all_feeds(broadcast_callback=None):
                 prefix = max(0, min(32, prefix))
                 net_str = f"{p[3]}/{prefix}"
                 if not is_public_ip(p[3]): continue
-                parsed.append((10 if cc in HOT_CC else 1, rir, cc, net_str, net_str))
+                priority = 10 if cc in HOT_CC or rir == "RIPE" else 1
+                parsed.append((priority, rir, cc, net_str, net_str))
             except: continue
         return parsed
 
-    async def _fetch_and_yield(rir, url):
+    async def _fetch_and_compile_rir(rir, url):
         if broadcast_callback:
             await broadcast_callback({"event": "status", "msg": f"Contacting {rir}..."})
         try:
-            timeout = 6 if rir == "LACNIC" else 15
-            r = await loop.run_in_executor(None, lambda u=url: requests.get(u, timeout=timeout))
-            
+            r = await loop.run_in_executor(None, lambda u=url: requests.get(u, timeout=12))
             if broadcast_callback:
-                await broadcast_callback({"event": "status", "msg": f"Parsing {rir}..."})
-                
-            rir_nets = await loop.run_in_executor(None, _parse_rir_content, rir, r.text)
+                await broadcast_callback({"event": "status", "msg": f"Compiling {rir} Targets..."})
             
-            def _compile_rir(nets):
+            raw_nets = await loop.run_in_executor(None, _parse_rir_content, rir, r.text)
+            
+            def _compile_internal(nets):
                 fragged = []
                 for prio, rir_name, cc, net_str, master in nets:
                     for f in fragment_network(net_str):
@@ -75,22 +74,23 @@ async def fetch_all_feeds(broadcast_callback=None):
                 fragged.sort(key=lambda x: x[0], reverse=True)
                 return fragged
 
-            return await loop.run_in_executor(None, _compile_rir, rir_nets)
+            return await loop.run_in_executor(None, _compile_internal, raw_nets)
         except Exception as e:
             if broadcast_callback:
-                await broadcast_callback({"event": "status", "msg": f"{rir} deferred: {str(e)[:30]}"})
+                await broadcast_callback({"event": "status", "msg": f"{rir} skipped: {str(e)[:30]}"})
             return []
 
-    # Concurrent fetch but yield as ready to avoid blocking
-    fetch_tasks = [asyncio.create_task(_fetch_and_yield(rir, url)) for rir, url in FEEDS.items()]
+    # Concurrent fetch using as_completed to yield as soon as the FASTEST RIR finishes
+    fetch_tasks = [asyncio.create_task(_fetch_and_compile_rir(rir, url)) for rir, url in FEEDS.items()]
     
     for task in asyncio.as_completed(fetch_tasks):
-        targets = await task
-        for target in targets:
+        rir_targets = await task
+        for target in rir_targets:
             yield target
 
     if broadcast_callback:
-        await broadcast_callback({"event": "status", "msg": "Intelligence feeds fully deployed."})
+        await broadcast_callback({"event": "status", "msg": "Intelligence deployment cycle complete."})
+
 
 
 

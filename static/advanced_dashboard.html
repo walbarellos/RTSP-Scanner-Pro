@@ -27,11 +27,16 @@
 
     <script>
         async function loadStreams() {
-            // Buscamos as câmeras do nosso servidor
-            const r = await fetch('/api/results?status=open');
+            // Buscamos APENAS os favoritos (Mission Book)
+            const r = await fetch('/api/results?bookmarked=1');
             const data = await r.json();
             const grid = document.getElementById('webrtc-grid');
             
+            if (data.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 100px; color: #3a4a5a;">MISSION WALL EMPTY. PIN CAMERAS IN RECON DASHBOARD FIRST.</div>';
+                return;
+            }
+
             data.forEach(d => {
                 const streamName = `${d.cc}_${d.ip.replace(/\./g, '_')}`;
                 // O go2rtc roda na porta 1984 por padrão

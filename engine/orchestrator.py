@@ -67,9 +67,14 @@ async def run_scan(archiver):
 
 async def _worker(target_ip, rir, cc, archiver, semaphore):
     async with archiver.active_tasks_lock:
+        self_id = archiver.active_tasks
         archiver.active_tasks += 1
     
     try:
+        # Visual feedback: even if closed, tell the UI we are hitting it
+        if archiver.scanned_count % 5 == 0: # Throttle UI events to not flood
+            await archiver.broadcast({"event": "probing_active", "ip": target_ip, "cc": cc})
+
         res = await probe_ip(target_ip, 554, CONNECT_TIMEOUT, rir, cc)
         if res:
             if res["status"] == "open":
