@@ -4,12 +4,12 @@ import os
 import socket
 import cv2
 import time
-from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
-from scanner_engine import ScannerEngine
+from engine import Archiver, run_scan
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -18,8 +18,11 @@ os.makedirs("static/screens", exist_ok=True)
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Shared scanner instance
-rir_scanner = ScannerEngine()
+rir_scanner = Archiver("rtsp_scan.db")
+
+@app.on_event("startup")
+async def startup_event():
+    rir_scanner.init_db_sync()
 
 PATHS = [
     "stream", "live", "1", "video", "cam", "ch01",
@@ -163,47 +166,55 @@ async def scan_generator(cidr):
 
 
 def gen_frames(rtsp_url):
-    """Generator for MJPEG stream from RTSP URL with safety breaks."""
-    cap = cv2.VideoCapture(rtsp_url)
-    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
+    # Set transport option BEFORE opening the capture
+    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    # Using a list of parameters to avoid os.environ racing
+    # Note: for older opencv versions, this is the most reliable way
+    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 12000) # 12 seconds for slow links
+    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 12000)
     
+    frame_count = 0
     empty_frames = 0
+    
     try:
         while True:
             success, frame = cap.read()
             if not success:
                 empty_frames += 1
-                if empty_frames > 5: break # Aborta se falhar 5 vezes seguidas
-                time.sleep(0.1)
+                if empty_frames > 40: # Much higher tolerance for initial buffering
+                    break
+                time.sleep(0.25)
                 continue
             
             empty_frames = 0
+            frame_count += 1
             
-            # OTIMIZAÇÃO v8.1: Downscale para HEVC/QHD
+            # Skip 1 out of 2 frames (approx 15fps) - Better balance than 1/3
+            if frame_count % 2 != 0:
+                continue
+
             h, w = frame.shape[:2]
             if w > 1280:
                 frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
-
-            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
             if not ret: continue
             
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             
-            time.sleep(0.01)
+            # Small break to allow other threads to run
+            time.sleep(0.05)
     finally:
         cap.release()
 
 
 async def rir_scan_generator():
-    # If not running, start it in the background
     if not rir_scanner.is_running:
-        asyncio.create_task(rir_scanner.run_scan())
-    
-    # Always yield events from the shared broadcaster
+        asyncio.create_task(run_scan(rir_scanner))
     async for event in rir_scanner.event_generator():
         yield {"event": event["event"], "data": json.dumps(event)}
+
 
 @app.get("/")
 async def index():
@@ -224,36 +235,41 @@ async def scan(cidr: str = ""):
         cidr, _ = get_local_network()
     return EventSourceResponse(scan_generator(cidr))
 
+
 @app.get("/api/scan/rir")
 async def scan_rir():
     return EventSourceResponse(rir_scan_generator())
+
 
 @app.post("/api/scan/rir/skip")
 async def skip_rir_block():
     rir_scanner.skip_requested = True
     return {"msg": "Skip requested for current block"}
 
+
 @app.post("/api/scan/rir/stop")
 async def stop_rir_scan():
-    # Force stop by setting is_running to false and clearing listeners
     rir_scanner.is_running = False
     return {"msg": "Stop signal sent (engine will halt on next iteration)"}
+
 
 @app.get("/api/live")
 async def live_stream(url: str):
     return StreamingResponse(gen_frames(url), media_type="multipart/x-mixed-replace; boundary=frame")
 
+
 @app.post("/api/scan/inject")
 async def inject_target(target: str):
     """Injeta um alvo ou rede manualmente na fila de prioridade."""
     if not rir_scanner.is_running:
-        asyncio.create_task(rir_scanner.run_scan())
-        # Pequeno delay para garantir o init
+        asyncio.create_task(run_scan(rir_scanner))
         await asyncio.sleep(1)
-    
-    # Adiciona à lista de alvos manuais do scanner (precisamos expor essa funcionalidade)
     rir_scanner.inject_high_priority(target)
     return {"status": "injected", "target": target}
+
+
+@app.get("/api/results")
+async def get_results(status: str = "open", bookmarked: int = None):
     import sqlite3
     con = sqlite3.connect(rir_scanner.db_path)
     con.row_factory = sqlite3.Row
@@ -264,6 +280,7 @@ async def inject_target(target: str):
     con.close()
     return [dict(r) for r in rows]
 
+
 @app.get("/api/bookmark/ids")
 async def get_bookmarked_ids():
     import sqlite3
@@ -272,18 +289,20 @@ async def get_bookmarked_ids():
     con.close()
     return [r[0] for r in rows]
 
+
 @app.post("/api/bookmark")
 async def toggle_bookmark(ip: str, state: int):
-    """Marca ou desmarca um alvo como favorito."""
     import sqlite3
     con = sqlite3.connect(rir_scanner.db_path)
     con.execute("UPDATE results SET bookmarked=? WHERE ip=?", (state, ip))
     con.commit(); con.close()
+    # Sync with TXT file
+    await rir_scanner.sync_favorites_txt()
     return {"status": "success", "ip": ip, "bookmarked": state}
+
 
 @app.get("/api/debug/probe")
 async def debug_probe(ip: str, port: int = 554, path: str = "/"):
-    """Realiza um handshake RTSP manual e retorna a conversa RAW."""
     import socket, base64
     log = []
     try:
@@ -294,13 +313,8 @@ async def debug_probe(ip: str, port: int = 554, path: str = "/"):
             resp = s.recv(4096).decode(errors='ignore')
             log.append({"req": req, "resp": resp})
             return resp
-
-        # Step 1: OPTIONS
-        resp = send_req("OPTIONS", f"rtsp://{ip}:{port}/")
-        
-        # Step 2: DESCRIBE
-        resp = send_req("DESCRIBE", f"rtsp://{ip}:{port}{path}")
-        
+        send_req("OPTIONS", f"rtsp://{ip}:{port}/")
+        send_req("DESCRIBE", f"rtsp://{ip}:{port}{path}")
         s.close()
         return {"ip": ip, "log": log}
     except Exception as e:

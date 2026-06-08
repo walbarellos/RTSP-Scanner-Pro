@@ -1,4 +1,5 @@
 #!/bin/bash
+ulimit -n 65536
 # Instala dependências e sobe o servidor
 pip install -r requirements.txt --break-system-packages -q
 echo ""

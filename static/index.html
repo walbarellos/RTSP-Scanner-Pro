@@ -3,349 +3,926 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RTSP INTELLIGENCE v8.6 - Cleanup Master</title>
+    <title>RTSP INTELLIGENCE v8.8</title>
     <style>
-        :root { 
-            --green: #00ff41; 
-            --red: #ff2244; 
-            --bg: #050505; 
-            --panel: #111;
-            --text-dim: #666;
-            --cyan: #4af;
-            --star: #ffcc00;
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+        :root {
+            --g: #00ff41;
+            --g2: #00cc33;
+            --r: #ff2244;
+            --c: #00d4ff;
+            --y: #ffd600;
+            --bg: #020305;
+            --panel: #080b10;
+            --border: #1a2030;
+            --dim: #3a4a5a;
         }
-        * { box-sizing: border-box; }
-        body { 
-            background: var(--bg); 
-            color: var(--green); 
-            font-family: 'Courier New', monospace; 
-            margin: 0; 
-            padding: 20px; 
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--g);
+            font-family: 'Share Tech Mono', monospace;
             display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* scanline overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.08) 2px,
+                rgba(0,0,0,0.08) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* ── SIDEBAR ─────────────────────────────── */
+        .sidebar {
+            width: 320px;
+            min-width: 320px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+
+        .brand {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 1.3em;
+            letter-spacing: 6px;
+            color: #fff;
+        }
+
+        .brand span { color: var(--g); }
+
+        .ver {
+            font-size: 0.55em;
+            color: var(--dim);
+            letter-spacing: 2px;
+            margin-top: 2px;
+        }
+
+        .status-dot {
+            position: absolute;
+            top: 20px; right: 20px;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--dim);
+            transition: background 0.3s;
+        }
+        .status-dot.live { background: var(--g); box-shadow: 0 0 8px var(--g); animation: blink 1.5s infinite; }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* stats */
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat {
+            background: var(--panel);
+            padding: 14px 16px;
+            text-align: center;
+        }
+
+        .stat-val {
+            display: block;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 2em;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .stat-val.live-count { color: var(--g); text-shadow: 0 0 20px rgba(0,255,65,0.4); }
+
+        .stat-lbl {
+            font-size: 0.55em;
+            color: var(--dim);
+            letter-spacing: 3px;
+            margin-top: 4px;
+        }
+
+        /* network block */
+        .net-block {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.65em;
+        }
+
+        .net-lbl { color: var(--dim); letter-spacing: 2px; margin-bottom: 4px; }
+
+        .net-val {
+            color: var(--c);
+            font-size: 1.2em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* controls */
+        .controls { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+
+        .inject-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .inject-input {
+            flex: 1;
+            background: #000;
+            border: 1px solid var(--border);
+            color: var(--c);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7em;
+            padding: 8px 10px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .inject-input:focus { border-color: var(--c); }
+        .inject-input::placeholder { color: var(--dim); }
+
+        .btn-jump {
+            background: var(--y);
+            color: #000;
+            border: none;
+            padding: 8px 12px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 0.75em;
+            letter-spacing: 1px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+        .btn-jump:hover { opacity: 0.85; }
+
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+        .btn {
+            border: none;
+            padding: 10px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.75em;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-connect { background: var(--g); color: #000; grid-column: 1/-1; }
+        .btn-connect:hover { background: var(--g2); }
+        .btn-skip { background: transparent; color: var(--c); border: 1px solid var(--c); }
+        .btn-skip:hover { background: rgba(0,212,255,0.08); }
+        .btn-purge { background: transparent; color: var(--r); border: 1px solid rgba(255,34,68,0.4); }
+        .btn-purge:hover { background: rgba(255,34,68,0.08); }
+
+        /* tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            color: var(--dim);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.6em;
+            letter-spacing: 2px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active { color: var(--c); border-bottom-color: var(--c); }
+
+        /* log */
+        .log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 14px;
+            font-size: 0.62em;
+            color: var(--dim);
+            line-height: 1.7;
+        }
+
+        .log::-webkit-scrollbar { width: 3px; }
+        .log::-webkit-scrollbar-track { background: transparent; }
+        .log::-webkit-scrollbar-thumb { background: var(--border); }
+
+        .log-entry { display: flex; gap: 8px; }
+        .log-time { color: #2a3a4a; white-space: nowrap; }
+        .log-msg { color: #4a6a5a; }
+        .log-msg.hi { color: var(--g); }
+        .log-msg.warn { color: var(--y); }
+        .log-msg.err { color: var(--r); }
+
+        /* ── MAIN ────────────────────────────────── */
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--bg);
+        }
+
+        .main::-webkit-scrollbar { width: 4px; }
+        .main::-webkit-scrollbar-track { background: transparent; }
+        .main::-webkit-scrollbar-thumb { background: var(--border); }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        /* ── CARD ────────────────────────────────── */
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.2s, transform 0.15s;
+            animation: cardIn 0.3s ease both;
+        }
+
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .card:hover { transform: translateY(-2px); }
+        .card.confirmed { border-color: rgba(0,255,65,0.35); }
+        .card.confirmed:hover { border-color: var(--g); }
+        .card.failed { opacity: 0.2; pointer-events: none; }
+
+        /* corner accents */
+        .card::before, .card::after {
+            content: '';
+            position: absolute;
+            width: 10px; height: 10px;
+            z-index: 2;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .card.confirmed::before {
+            top: 0; left: 0;
+            border-top: 2px solid var(--g);
+            border-left: 2px solid var(--g);
+            opacity: 1;
+        }
+
+        .card.confirmed::after {
+            bottom: 0; right: 0;
+            border-bottom: 2px solid var(--g);
+            border-right: 2px solid var(--g);
+            opacity: 1;
+        }
+
+        .preview {
+            height: 160px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* scanning animation */
+        .scan-anim {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .scan-ring {
+            width: 40px; height: 40px;
+            border: 2px solid var(--border);
+            border-top-color: var(--c);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .scan-txt {
+            font-size: 0.55em;
+            color: var(--c);
+            letter-spacing: 3px;
+            animation: blink 1.5s infinite;
+        }
+
+        /* badges */
+        .badge {
+            position: absolute;
+            top: 8px; left: 8px;
+            padding: 2px 7px;
+            font-size: 0.55em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            z-index: 3;
+        }
+
+        .badge-probing { background: var(--c); color: #000; }
+        .badge-live {
+            background: var(--g);
+            color: #000;
+            animation: blink 2s infinite;
+        }
+
+        /* action buttons on card */
+        .card-actions {
+            position: absolute;
+            top: 8px; right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 3;
+        }
+
+        .card-btn {
+            width: 26px; height: 26px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 0.75em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .card-btn:hover { border-color: #fff; }
+        .card-btn.star { color: #555; }
+        .card-btn.star.active { color: var(--y); border-color: rgba(255,214,0,0.5); }
+        .card-btn.kill:hover { background: rgba(255,34,68,0.5); border-color: var(--r); }
+
+        /* info */
+        .info { padding: 10px 12px; }
+
+        .info-ip {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 1.1em;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+
+        .info-meta {
+            font-size: 0.6em;
+            color: var(--dim);
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .info-meta.live { color: var(--g); }
+
+        .swarm-tag {
+            display: inline-block;
+            font-size: 0.85em;
+            color: var(--y);
+            border: 1px solid rgba(255,214,0,0.4);
+            padding: 1px 5px;
+            margin-right: 4px;
+        }
+
+        .info-btns { display: flex; gap: 6px; }
+
+        .btn-stream {
+            flex: 1;
+            background: var(--g);
+            color: #000;
+            border: none;
+            padding: 7px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 0.7em;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-stream:hover { background: var(--g2); }
+        .btn-stream:disabled {
+            background: var(--border);
+            color: var(--dim);
+            cursor: default;
+        }
+
+        .btn-dbg {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--c);
+            padding: 7px 10px;
+            font-size: 0.75em;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .btn-dbg:hover { border-color: var(--c); }
+
+        /* ── DEBUG MODAL ─────────────────────────── */
+        #modal-debug {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 10000;
+            align-items: center;
             justify-content: center;
         }
-        
-        .layout { 
-            display: grid; 
-            grid-template-columns: 350px 1fr; 
-            gap: 20px; 
-            width: 100%;
-            max-width: 1800px;
-        }
-        
-        .sidebar { 
-            background: var(--panel); 
-            padding: 20px; 
-            border: 1px solid #333; 
-            height: calc(100vh - 40px); 
-            display: flex; 
-            flex-direction: column; 
-            position: sticky; 
-            top: 20px; 
-        }
-        .v-tag { font-size: 0.6em; color: #444; float: right; }
-        
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .stat-box { background: #000; border: 1px solid #222; padding: 10px; text-align: center; }
-        .stat-val { display: block; font-size: 1.5em; font-weight: bold; color: #fff; }
-        .stat-lbl { font-size: 0.6em; color: var(--text-dim); text-transform: uppercase; }
 
-        .btn-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
-        button { 
-            border: none; 
-            padding: 12px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            font-family: inherit; 
-            text-transform: uppercase;
-            transition: 0.2s;
-        }
-        .btn-main { background: var(--green); color: #000; }
-        .btn-sec  { background: var(--cyan); color: #000; }
-        .btn-warn { background: #222; color: var(--red); border: 1px solid var(--red); }
-        
-        .log { flex: 1; overflow-y: auto; background: #000; border: 1px solid #222; padding: 10px; font-size: 0.7em; color: #777; }
-
-        .gallery { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
-            gap: 15px; 
-        }
-        
-        .card { background: var(--panel); border: 1px solid #222; border-radius: 4px; overflow: hidden; position: relative; }
-        .card.confirmed { border: 2px solid var(--green); box-shadow: 0 0 15px rgba(0,255,65,0.1); }
-        .card.failed { opacity: 0.3; filter: grayscale(1); }
-
-        .preview { height: 170px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; border-bottom: 1px solid #222; }
-        .preview img { width: 100%; height: 100%; object-fit: cover; }
-        
-        .badge { position: absolute; top: 8px; left: 8px; padding: 3px 6px; font-size: 0.6em; font-weight: bold; border-radius: 2px; }
-        .badge-anal { background: var(--cyan); color: #000; }
-        .badge-live { background: var(--green); color: #000; }
-        .swarm-text { color: var(--star); font-weight: bold; border: 1px solid var(--star); padding: 2px 4px; border-radius: 3px; font-size: 0.9em; margin-right: 5px; }
-
-        .btn-star { 
-            position: absolute; top: 8px; right: 40px; 
-            background: rgba(0,0,0,0.7); color: #888; 
-            border: 1px solid #333; width: 28px; height: 28px; 
-            border-radius: 4px; cursor: pointer; z-index: 10;
-        }
-        .btn-star.active { color: var(--star); border-color: var(--star); }
-
-        .btn-kill { 
-            position: absolute; top: 8px; right: 8px; 
-            background: rgba(255,0,0,0.3); color: #fff; 
-            border: 1px solid rgba(255,0,0,0.5); width: 28px; height: 28px; 
-            border-radius: 4px; cursor: pointer; z-index: 10; font-weight: bold;
+        .modal-inner {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
         }
 
-        .info { padding: 12px; font-size: 0.75em; }
-        .ip { font-size: 1.1em; font-weight: bold; color: #fff; margin-bottom: 4px; }
-        .meta { color: #666; margin-bottom: 8px; }
-        
-        .actions { display: grid; grid-template-columns: 1fr 35px; gap: 4px; }
-        .btn-view { background: var(--green); color: #000; padding: 8px; font-size: 0.8em; }
-        .btn-gear { background: #222; color: var(--cyan); border: 1px solid var(--cyan); }
-
-        .tab-switcher { display: flex; gap: 2px; margin-bottom: 10px; }
-        .tab-btn { flex: 1; padding: 10px; background: #222; color: #666; border: 1px solid #333; font-size: 0.7em; cursor: pointer; }
-        .tab-btn.active { background: var(--cyan); color: #000; border-color: var(--cyan); }
-
-        #modal-debug { 
-            display: none; position: fixed; inset: 40px; 
-            background: #000; border: 1px solid var(--green); 
-            z-index: 1000; flex-direction: column; padding: 20px; 
+        .modal-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        #debug-out { flex: 1; overflow-y: auto; background: #050505; color: var(--green); padding: 15px; font-size: 0.8em; white-space: pre-wrap; }
 
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .analyzing-text { font-size: 0.7em; color: var(--cyan); animation: pulse 1.5s infinite; }
+        .modal-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.85em;
+            letter-spacing: 3px;
+            color: var(--c);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--r);
+            font-size: 1.3em;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        #debug-out {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            font-size: 0.7em;
+            color: #7a9a8a;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        #debug-out::-webkit-scrollbar { width: 3px; }
+        #debug-out::-webkit-scrollbar-thumb { background: var(--border); }
+
+        /* empty state */
+        .empty {
+            grid-column: 1/-1;
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--dim);
+            font-size: 0.7em;
+            letter-spacing: 3px;
+        }
     </style>
 </head>
 <body>
-    <div class="layout">
-        <div class="sidebar">
-            <div style="margin-bottom: 20px;">
-                <span class="v-tag">v8.8.0</span>
 
-                <h2 style="margin:0; letter-spacing:3px;">RECON</h2>
-            </div>
+<div class="sidebar">
+    <div class="sidebar-header">
+        <div class="brand">RTSP <span>INTEL</span></div>
+        <div class="ver">v8.8 · QUANTUM-JUMP ENGINE</div>
+        <div class="status-dot" id="status-dot"></div>
+    </div>
 
-            <div class="stat-grid">
-                <div class="stat-box">
-                    <span id="scanned" class="stat-val">0</span>
-                    <span class="stat-lbl">Audited</span>
-                </div>
-                <div class="stat-box" style="border-color: var(--green);">
-                    <span id="confirmed" class="stat-val" style="color:var(--green);">0</span>
-                    <span class="stat-lbl">Live</span>
-                </div>
-            </div>
-
-            <div class="stat-box" style="margin-bottom: 20px;">
-                <span id="target" class="stat-val" style="font-size: 1em;">IDLE</span>
-                <span class="stat-lbl">Network Block</span>
-            </div>
-
-            <div class="btn-group">
-                <input type="text" id="target-input" placeholder="IP or CIDR (ex: 103.213.193.0/24)" style="padding:10px; background:#000; border:1px solid #333; color:var(--green); font-family:inherit; margin-bottom:5px; font-size:0.7em;">
-                <button class="btn-sec" onclick="jumpToTarget()" style="margin-bottom:10px; background:var(--star);">⚡ JUMP TO TARGET</button>
-                <button class="btn-main" onclick="initScan()">Connect Neural Link</button>
-                <button class="btn-sec"  onclick="skipNet()">Skip Block</button>
-                <button class="btn-warn" onclick="purge()">Clear Non-Live</button>
-            </div>
-
-            <div class="tab-switcher">
-                <button onclick="switchTab('recon')" id="t-recon" class="tab-btn active">RECONNAISSANCE</button>
-                <button onclick="switchTab('book')"  id="t-book"  class="tab-btn">MISSION BOOK</button>
-            </div>
-
-            <div id="log" class="log"></div>
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-val" id="scanned">0</span>
+            <div class="stat-lbl">AUDITED</div>
         </div>
-
-        <div class="gallery-container">
-            <div id="gallery" class="gallery"></div>
-            <div id="gallery-book" class="gallery" style="display:none;"></div>
+        <div class="stat">
+            <span class="stat-val live-count" id="confirmed">0</span>
+            <div class="stat-lbl">LIVE</div>
         </div>
     </div>
 
-    <div id="modal-debug">
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <h3 style="margin:0; font-size:0.9em;">[PROTOCOL_LAB_RAW]</h3>
-            <button onclick="closeDebug()" style="background:none; color:var(--red); border:none; font-size:1.5em; cursor:pointer;">&times;</button>
+    <div class="net-block">
+        <div class="net-lbl">CURRENT BLOCK</div>
+        <div class="net-val" id="net-val">IDLE</div>
+        <div style="font-size:0.7em; color: var(--c); margin-top:3px;" id="net-pais"></div>
+    </div>
+
+    <div class="controls">
+        <div class="inject-row">
+            <input class="inject-input" id="target-input" placeholder="IP or CIDR  eg: 103.0.0.0/24">
+            <button class="btn-jump" onclick="jumpToTarget()">⚡ JUMP</button>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-connect" onclick="initScan()">CONNECT NEURAL LINK</button>
+            <button class="btn btn-skip" onclick="skipNet()">SKIP BLOCK</button>
+            <button class="btn btn-purge" onclick="purge()">CLEAR FAILED</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" id="t-recon" onclick="switchTab('recon')">RECON</button>
+        <button class="tab" id="t-book" onclick="switchTab('book')">MISSION BOOK</button>
+    </div>
+
+    <div class="log" id="log"></div>
+</div>
+
+<div class="main">
+    <div class="gallery" id="gallery">
+        <div class="empty" id="empty-msg">NEURAL LINK OFFLINE — PRESS CONNECT</div>
+    </div>
+    <div class="gallery" id="gallery-book" style="display:none;"></div>
+</div>
+
+<div id="modal-debug">
+    <div class="modal-inner">
+        <div class="modal-header">
+            <div class="modal-title">PROTOCOL_LAB · RAW HANDSHAKE</div>
+            <button class="modal-close" onclick="closeDebug()">&times;</button>
         </div>
         <div id="debug-out"></div>
     </div>
+</div>
 
-    <script>
-        const state = {
-            confirmed: new Set(),
-            analyzing: new Set(),
-            bookmarked: new Set(),
-            activeTab: 'recon',
-            eventSource: null
-        };
+<script>
+    const state = {
+        confirmed: new Set(),
+        analyzing: new Set(),
+        bookmarked: new Set(),
+        activeTab: 'recon',
+        eventSource: null
+    };
 
-        function log(msg) {
-            const div = document.createElement('div');
-            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            const container = document.getElementById('log');
-            container.prepend(div);
-            if(container.children.length > 50) container.lastChild.remove();
+    const CC_MAP = {
+        "CN": "🇨🇳 China",
+        "RU": "🇷🇺 Rússia",
+        "BR": "🇧🇷 Brasil",
+        "US": "🇺🇸 EUA",
+        "KR": "🇰🇷 Coreia do Sul",
+        "JP": "🇯🇵 Japão",
+        "TW": "🇹🇼 Taiwan",
+        "UA": "🇺🇦 Ucrânia",
+        "TR": "🇹🇷 Turquia",
+        "IN": "🇮🇳 Índia",
+        "IR": "🇮🇷 Irã",
+        "USER": "📍 MANUAL",
+        "MANUAL": "📍 MANUAL",
+        "ARIN": "🌎 ARIN",
+        "RIPE": "🌍 RIPE",
+        "APNIC": "🌏 APNIC",
+        "AFRINIC": "🌍 AFRINIC",
+        "LACNIC": "🌎 LACNIC",
+        "DE": "🇩🇪 Alemanha",
+        "FR": "🇫🇷 França",
+        "GB": "🇬🇧 Reino Unido",
+        "VN": "🇻🇳 Vietnã",
+        "TH": "🇹🇭 Tailândia",
+        "IT": "🇮🇹 Itália",
+        "ES": "🇪🇸 Espanha",
+        "AR": "🇦🇷 Argentina",
+        "CO": "🇨🇴 Colômbia"
+    };
+
+    function t() {
+        return new Date().toLocaleTimeString('en-US', {hour12: false});
+    }
+
+    function log(msg, cls = '') {
+        const el = document.getElementById('log');
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = `<span class="log-time">${t()}</span><span class="log-msg ${cls}">${msg}</span>`;
+        el.prepend(div);
+        if (el.children.length > 80) el.lastChild.remove();
+    }
+
+    function setLive(on) {
+        document.getElementById('status-dot').className = 'status-dot' + (on ? ' live' : '');
+    }
+
+    function skipNet() {
+        fetch('/api/scan/rir/skip', {method: 'POST'});
+        log('SKIP COMMAND SENT', 'warn');
+    }
+
+    function purge() {
+        document.querySelectorAll('.card:not(.confirmed)').forEach(c => c.remove());
+        state.analyzing.clear();
+        log('NON-LIVE CARDS PURGED', 'warn');
+    }
+
+    async function toggleStar(ip, btn) {
+        const isSaved = state.bookmarked.has(ip);
+        const newState = isSaved ? 0 : 1;
+        if (newState) { state.bookmarked.add(ip); btn.classList.add('active'); log(`PINNED: ${ip}`, 'hi'); }
+        else { state.bookmarked.delete(ip); btn.classList.remove('active'); log(`UNPINNED: ${ip}`); }
+        await fetch(`/api/bookmark?ip=${ip}&state=${newState}`, {method: 'POST'});
+        if (state.activeTab === 'book') loadBook();
+    }
+
+    async function syncBookmarks() {
+        try {
+            const r = await fetch('/api/bookmark/ids');
+            state.bookmarked = new Set(await r.json());
+        } catch(e) {}
+    }
+
+    function switchTab(t) {
+        state.activeTab = t;
+        document.getElementById('gallery').style.display = t === 'recon' ? 'grid' : 'none';
+        document.getElementById('gallery-book').style.display = t === 'book' ? 'grid' : 'none';
+        document.getElementById('t-recon').className = 'tab' + (t === 'recon' ? ' active' : '');
+        document.getElementById('t-book').className  = 'tab' + (t === 'book' ? ' active' : '');
+        if (t === 'book') loadBook();
+    }
+
+    async function jumpToTarget() {
+        const v = document.getElementById('target-input').value.trim();
+        if (!v) return;
+        log(`JUMPING → ${v}`, 'warn');
+        await fetch(`/api/scan/inject?target=${encodeURIComponent(v)}`, {method: 'POST'});
+        document.getElementById('target-input').value = '';
+    }
+
+    function handleStreamError(img) {
+        img.parentElement.innerHTML = '<div class="empty" style="color:var(--r)">OFFLINE / TIMEOUT</div>';
+    }
+
+    function toggleStream(ip, url, btnId, prevId) {
+        const prev = document.getElementById(prevId);
+        const btn = document.getElementById(btnId);
+        const isStreaming = prev.querySelector('img');
+
+        if (isStreaming) {
+            // STOP
+            prev.innerHTML = '<div class="empty">STREAM STANDBY</div>';
+            btn.textContent = 'VIEW STREAM';
+            btn.style.background = 'var(--g)';
+            log(`STREAM TERMINATED: ${ip}`);
+        } else {
+            // START
+            prev.innerHTML = `
+                <span class="badge badge-live">● LIVE</span>
+                <img src="${url}" onerror="handleStreamError(this)">`;
+            btn.textContent = 'STOP STREAM';
+            btn.style.background = 'var(--r)';
+            log(`VIEWING LINK: ${ip}`, 'hi');
         }
+    }
 
-        function skipNet() { fetch('/api/scan/rir/skip', {method:'POST'}); log('SKIP COMMAND SENT'); }
-        function purge() { document.querySelectorAll('.card:not(.confirmed)').forEach(c => c.remove()); state.analyzing.clear(); }
+    async function loadBook() {
+        const g = document.getElementById('gallery-book');
+        g.innerHTML = '';
+        try {
+            const data = await (await fetch('/api/results?bookmarked=1')).json();
+            if (!data.length) { g.innerHTML = '<div class="empty">MISSION BOOK EMPTY</div>'; return; }
+            const aliases = [
+                window.location.origin,
+                window.location.origin.replace('localhost', '127.0.0.1')
+            ];
 
-        async function toggleStar(ip, btn) {
-            const isSaved = state.bookmarked.has(ip);
-            const newState = isSaved ? 0 : 1;
-            if(newState) { state.bookmarked.add(ip); btn.classList.add('active'); log(`PINNED: ${ip}`); }
-            else { state.bookmarked.delete(ip); btn.classList.remove('active'); log(`UNPINNED: ${ip}`); }
-            await fetch(`/api/bookmark?ip=${ip}&state=${newState}`, {method:'POST'});
-            if(state.activeTab === 'book') loadBook();
-        }
+            data.forEach((d, i) => {
+                const origin = aliases[i % aliases.length];
+                const url = d.working_url || '';
+                const streamUrl = `${origin}/api/live?url=${encodeURIComponent(url)}`;
 
-        async function syncBookmarks() {
-            try {
-                const r = await fetch('/api/bookmark/ids');
-                const ids = await r.json();
-                state.bookmarked = new Set(ids);
-            } catch(e) {}
-        }
-
-        function switchTab(t) {
-            state.activeTab = t;
-            document.getElementById('gallery').style.display = t === 'recon' ? 'grid' : 'none';
-            document.getElementById('gallery-book').style.display = t === 'book' ? 'grid' : 'none';
-            document.getElementById('t-recon').className = `tab-btn ${t === 'recon' ? 'active' : ''}`;
-            document.getElementById('t-book').className  = `tab-btn ${t === 'book' ? 'active' : ''}`;
-            if(t === 'book') loadBook();
-        }
-
-        async function jumpToTarget() {
-            const target = document.getElementById('target-input').value;
-            if(!target) return;
-            log(`JUMPING TO: ${target}`);
-            await fetch(`/api/scan/inject?target=${encodeURIComponent(target)}`, {method:'POST'});
-            document.getElementById('target-input').value = '';
-        }
-
-        async function loadBook() {
-            const r = await fetch('/api/results?bookmarked=1');
-            const data = await r.json();
-            const g = document.getElementById('gallery-book');
-            g.innerHTML = '';
-            data.forEach(d => {
+                const cardId = `book-${d.ip.replace(/\./g,'-')}`;
+                
                 const card = document.createElement('div');
                 card.className = 'card confirmed';
                 card.innerHTML = `
-                    <button class="btn-star active" onclick="toggleStar('${d.ip}', this)">★</button>
-                    <div class="preview"><img src="/api/live?url=${encodeURIComponent(d.working_url)}"></div>
-                    <div class="info">
-                        <div class="ip">${d.ip}</div>
-                        <div class="meta" style="color:var(--green);">${d.vendor} | ${d.res}</div>
-                        <button class="btn-view" onclick="window.open('/api/live?url=${encodeURIComponent(d.working_url)}','_blank')">STREAM</button>
+                    <div class="card-actions">
+                        <button class="card-btn star active" onclick="toggleStar('${d.ip}', this)">★</button>
                     </div>
-                `;
+                    <div class="preview" id="prev-${cardId}">
+                        <div class="empty">STREAM STANDBY</div>
+                    </div>
+                    <div class="info">
+                        <div class="info-ip">${d.ip}</div>
+                        <div class="info-meta live">${d.vendor || ''} · ${d.resolution || ''}</div>
+                        <div class="info-btns">
+                            <button class="btn-stream" id="btn-v-${cardId}" 
+                                onclick="toggleStream('${d.ip}', '${streamUrl}', 'btn-v-${cardId}', 'prev-${cardId}')">VIEW STREAM</button>
+                        </div>
+                    </div>`;
                 g.appendChild(card);
             });
-        }
+        } catch(e) { g.innerHTML = '<div class="empty">LOAD ERROR</div>'; }
+    }
 
-        function initScan() {
-            syncBookmarks();
-            if (state.eventSource) state.eventSource.close();
-            state.eventSource = new EventSource('/api/scan/rir');
-            
-            // Watchdog: Remove cards travados em "Probing" > 60s
-            setInterval(() => {
-                const now = Date.now();
-                document.querySelectorAll('.card:not(.confirmed)').forEach(c => {
-                    const ts = parseInt(c.dataset.ts);
-                    if (now - ts > 60000) {
-                        state.analyzing.delete(c.id.replace('c-','').replace(/-/g,'.'));
-                        c.remove();
-                    }
-                });
-            }, 30000);
+    function initScan() {
+        syncBookmarks();
+        if (state.eventSource) state.eventSource.close();
 
-            state.eventSource.addEventListener('status', e => log(JSON.parse(e.data).msg));
-            state.eventSource.addEventListener('network', e => document.getElementById('target').innerText = JSON.parse(e.data).net);
-            state.eventSource.addEventListener('progress', e => {
-                const d = JSON.parse(e.data);
-                document.getElementById('scanned').innerText = d.scanned.toLocaleString();
-                document.getElementById('confirmed').innerText = d.confirmed;
+        const empty = document.getElementById('empty-msg');
+        if (empty) empty.remove();
+
+        state.eventSource = new EventSource('/api/scan/rir');
+        setLive(true);
+        log('NEURAL LINK ESTABLISHED', 'hi');
+
+        // Watchdog: remove cards presos > 90s
+        setInterval(() => {
+            const now = Date.now();
+            document.querySelectorAll('.card:not(.confirmed)').forEach(c => {
+                if (now - parseInt(c.dataset.ts || 0) > 90000) {
+                    state.analyzing.delete(c.dataset.ip);
+                    c.remove();
+                }
             });
+        }, 30000);
 
-            state.eventSource.addEventListener('found_hw', e => {
+        state.eventSource.onerror = () => {
+            setLive(false);
+            log('SSE CONNECTION LOST', 'err');
+        };
+
+        state.eventSource.addEventListener('status', e => {
+            try { log(JSON.parse(e.data).msg); } catch(err) { console.error("Event parse error", err); }
+        });
+
+        state.eventSource.addEventListener('network', e => {
+            try {
+                const d = JSON.parse(e.data);
+                const pais = CC_MAP[d.cc] || `🌐 ${d.cc}`;
+                document.getElementById('net-val').textContent = `${d.net}`;
+                document.getElementById('net-pais').textContent = `${pais} · ${d.rir}`;
+            } catch(err) { console.error("Network event error", err); }
+        });
+
+        state.eventSource.addEventListener('progress', e => {
+            try {
+                const d = JSON.parse(e.data);
+                document.getElementById('scanned').textContent = d.scanned.toLocaleString();
+                document.getElementById('confirmed').textContent = d.confirmed;
+            } catch(err) { console.error("Progress event error", err); }
+        });
+
+        state.eventSource.addEventListener('found_hw', e => {
+            try {
                 const d = JSON.parse(e.data);
                 if (state.confirmed.has(d.ip) || state.analyzing.has(d.ip)) return;
                 state.analyzing.add(d.ip);
-                const card = document.createElement('div');
-                card.id = `c-${d.ip.replace(/\./g, '-')}`;
-                card.className = 'card';
-                card.dataset.ts = Date.now();
-                card.innerHTML = `
-                    <button class="btn-kill" onclick="this.parentElement.remove(); state.analyzing.delete('${d.ip}')">&times;</button>
-                    <button class="btn-star" onclick="toggleStar('${d.ip}', this)">★</button>
-                    <div class="preview"><span class="badge badge-anal">PROBING</span><div class="analyzing-text">ANALYZING...</div></div>
-                    <div class="info"><div class="ip">${d.ip}</div><div class="meta">${d.cc} | ${d.rir}</div>
-                    <div class="actions"><button class="btn-view" disabled>INTERROGATING</button><button class="btn-gear" onclick="debug('${d.ip}')">⚙</button></div></div>
-                `;
-                document.getElementById('gallery').prepend(card);
-            });
 
-            state.eventSource.addEventListener('confirmed', e => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.id = `c-${d.ip.replace(/\./g,'-')}`;
+                card.dataset.ts = Date.now();
+                card.dataset.ip = d.ip;
+                card.innerHTML = `
+                    <div class="card-actions">
+                        <button class="card-btn star" onclick="toggleStar('${d.ip}', this)">★</button>
+                        <button class="card-btn kill" onclick="this.closest('.card').remove(); state.analyzing.delete('${d.ip}')">✕</button>
+                    </div>
+                    <div class="preview">
+                        <span class="badge badge-probing">PROBING</span>
+                        <div class="scan-anim"><div class="scan-ring"></div><div class="scan-txt">ANALYZING</div></div>
+                    </div>
+                    <div class="info">
+                        <div class="info-ip">${d.ip}</div>
+                        <div class="info-meta">${d.cc} · ${d.rir}</div>
+                        <div class="info-btns">
+                            <button class="btn-stream" disabled>INTERROGATING</button>
+                            <button class="btn-dbg" onclick="debug('${d.ip}')">DBG</button>
+                        </div>
+                    </div>`;
+                document.getElementById('gallery').prepend(card);
+            } catch(err) { console.error("Found_hw event error", err); }
+        });
+
+        state.eventSource.addEventListener('confirmed', e => {
+            try {
                 const d = JSON.parse(e.data);
                 state.confirmed.add(d.ip);
                 state.analyzing.delete(d.ip);
-                const card = document.getElementById(`c-${d.ip.replace(/\./g, '-')}`);
-                if (card) {
-                    card.className = 'card confirmed';
-                    const starred = state.bookmarked.has(d.ip) ? 'active' : '';
-                    card.innerHTML = `
-                        <button class="btn-kill" onclick="this.parentElement.remove()">&times;</button>
-                        <button class="btn-star ${starred}" onclick="toggleStar('${d.ip}', this)">★</button>
-                        <div class="preview"><span class="badge badge-live">● LIVE</span><img src="/api/live?url=${encodeURIComponent(d.url)}" onerror="this.outerHTML='<div style=\'color:red\'>CODEC ERROR</div>'"></div>
-                        <div class="info">
-                            <div class="ip">${d.ip}</div>
-                            <div class="meta" style="color:var(--green); font-weight:bold;">
-                                ${d.vendor.includes('(Swarm)') ? `<span class="swarm-text">SWARM</span>` : ''}
-                                ${d.vendor.replace('(Swarm)', '')} | ${d.res}
-                            </div>
-                            <div class="actions">
-                                <button class="btn-view" onclick="window.open('/api/live?url=${encodeURIComponent(d.url)}','_blank')">FULLSCREEN</button>
-                                <button class="btn-gear" onclick="debug('${d.ip}')">⚙</button>
-                            </div>
-                        </div>
+                log(`HIT: ${d.ip} — ${d.vendor}`, 'hi');
 
-                    `;
+                const cardId = `recon-${d.ip.replace(/\./g,'-')}`;
+                let card = document.getElementById(`c-${d.ip.replace(/\./g,'-')}`);
+                if (!card) {
+                    card = document.createElement('div');
+                    card.id = `c-${d.ip.replace(/\./g,'-')}`;
+                    document.getElementById('gallery').prepend(card);
                 }
-            });
 
-            state.eventSource.addEventListener('failed_probe', e => {
+                const starred = state.bookmarked.has(d.ip) ? 'active' : '';
+                const isSwarm = d.vendor && d.vendor.includes('(Swarm)');
+                const vendorClean = (d.vendor || '').replace('(Swarm)', '').trim();
+                
+                const aliases = [
+                    window.location.origin,
+                    window.location.origin.replace('localhost', '127.0.0.1')
+                ];
+                const origin = aliases[state.confirmed.size % aliases.length];
+                const streamUrl = `${origin}/api/live?url=${encodeURIComponent(d.url)}`;
+
+                card.className = 'card confirmed';
+                card.dataset.ip = d.ip;
+                card.innerHTML = `
+                    <div class="card-actions">
+                        <button class="card-btn star ${starred}" onclick="toggleStar('${d.ip}', this)">★</button>
+                        <button class="card-btn kill" onclick="this.closest('.card').remove()">✕</button>
+                    </div>
+                    <div class="preview" id="prev-${cardId}">
+                        <div class="empty">READY TO VIEW</div>
+                    </div>
+                    <div class="info">
+                        <div class="info-ip">${d.ip}</div>
+                        <div class="info-meta live">
+                            ${isSwarm ? '<span class="swarm-tag">SWARM</span>' : ''}
+                            ${vendorClean} · ${d.res || ''}
+                        </div>
+                        <div class="info-btns">
+                            <button class="btn-stream" id="btn-v-${cardId}"
+                                onclick="toggleStream('${d.ip}', '${streamUrl}', 'btn-v-${cardId}', 'prev-${cardId}')">VIEW STREAM</button>
+                            <button class="btn-dbg" onclick="debug('${d.ip}')">DBG</button>
+                        </div>
+                    </div>`;
+            } catch(err) { console.error("Confirmed event error", err); }
+        });
+
+        state.eventSource.addEventListener('failed_probe', e => {
+            try {
                 const d = JSON.parse(e.data);
                 state.analyzing.delete(d.ip);
-                const card = document.getElementById(`c-${d.ip.replace(/\./g, '-')}`);
+                const card = document.getElementById(`c-${d.ip.replace(/\./g,'-')}`);
                 if (card && !state.confirmed.has(d.ip)) {
                     card.classList.add('failed');
-                    setTimeout(() => { if(!state.bookmarked.has(d.ip)) card.remove(); }, 3000);
+                    setTimeout(() => card.remove(), 2500);
                 }
-            });
-        }
+            } catch(err) { console.error("Failed_probe event error", err); }
+        });
+    }
 
-        async function debug(ip) {
-            const m = document.getElementById('modal-debug');
-            const out = document.getElementById('debug-out');
-            m.style.display = 'flex';
-            out.innerText = `Interrogating ${ip}...\n`;
-            try {
-                const r = await fetch(`/api/debug/probe?ip=${ip}`);
-                const data = await r.json();
-                data.log.forEach((step, i) => { out.innerText += `\n--- TRANSACTION ${i+1} ---\n> SENT:\n${step.req}\n< RECEIVED:\n${step.resp}`; });
-            } catch(e) { out.innerText += `\nERROR: ${e}`; }
-        }
-        function closeDebug() { document.getElementById('modal-debug').style.display = 'none'; }
-    </script>
+    async function debug(ip) {
+        document.getElementById('modal-debug').style.display = 'flex';
+        const out = document.getElementById('debug-out');
+        out.textContent = `Interrogating ${ip}...\n`;
+        try {
+            const data = await (await fetch(`/api/debug/probe?ip=${ip}`)).json();
+            if (data.error) { out.textContent += `\nERROR: ${data.error}`; return; }
+            data.log.forEach((s, i) => {
+                out.textContent += `\n─── TX ${i+1} ───────────────────────────\n▶ SENT\n${s.req}\n◀ RECV\n${s.resp}`;
+            });
+        } catch(e) { out.textContent += `\nFATAL: ${e}`; }
+    }
+
+    function closeDebug() {
+        document.getElementById('modal-debug').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeDebug();
+    });
+</script>
 </body>
 </html>
