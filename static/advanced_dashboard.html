@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RTSP ADVANCED · WEBRTC DASHBOARD</title>
+    <style>
+        body { background: #020305; color: #00ff41; font-family: 'monospace'; margin: 0; padding: 20px; }
+        .header { border-bottom: 1px solid #1a2030; padding-bottom: 10px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 15px; }
+        .card { background: #080b10; border: 1px solid #1a2030; padding: 10px; }
+        .card:hover { border-color: #00ff41; }
+        iframe { width: 100%; height: 250px; border: none; background: #000; }
+        .info { font-size: 0.8em; margin-top: 8px; color: #3a4a5a; }
+        .back-btn { color: #00d4ff; text-decoration: none; font-size: 0.9em; margin-bottom: 20px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/static/index.html" class="back-btn">← BACK TO RECON DASHBOARD</a>
+        <h1>RTSP ADVANCED <span>WEBRTC MODE</span></h1>
+        <p>Powered by go2rtc · High Performance · Low Latency</p>
+    </div>
+    
+    <div class="grid" id="webrtc-grid">
+        <!-- Loaded dynamically -->
+    </div>
+
+    <script>
+        async function loadStreams() {
+            // Buscamos as câmeras do nosso servidor
+            const r = await fetch('/api/results?status=open');
+            const data = await r.json();
+            const grid = document.getElementById('webrtc-grid');
+            
+            data.forEach(d => {
+                const streamName = `${d.cc}_${d.ip.replace(/\./g, '_')}`;
+                // O go2rtc roda na porta 1984 por padrão
+                const rtcUrl = `http://${window.location.hostname}:1984/api/stream.html?src=${streamName}&mode=webrtc`;
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <iframe src="${rtcUrl}"></iframe>
+                    <div class="info">
+                        <b>${d.ip}</b> | ${d.cc} | ${d.vendor || 'Generic'}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+        loadStreams();
+    </script>
+</body>
+</html>
