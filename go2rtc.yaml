@@ -1,3 +1,5 @@
+api:
+  origin: '*'
 ffmpeg:
   bin: ffmpeg
   global: -hwaccel cuda -hwaccel_output_format cuda
@@ -20,9 +22,6 @@ streams:
   KR_222_104_215_56:
   - rtsp://admin:admin@222.104.215.56:554
   - ffmpeg:rtsp://admin:admin@222.104.215.56:554#video=h264
-  USER_109_109_54_5:
-  - rtsp://admin:admin@109.109.54.5:554
-  - ffmpeg:rtsp://admin:admin@109.109.54.5:554#video=h264
   USER_109_203_192_41:
   - rtsp://admin:12345@109.203.192.41:554
   - ffmpeg:rtsp://admin:12345@109.203.192.41:554#video=h264
@@ -34,3 +33,8 @@ streams:
   - ffmpeg:rtsp://admin:@114.141.35.253:554#video=hevc
   USER_31_40_113_130:
   - rtsp://31.40.113.130:554/
+  - ffmpeg:rtsp://31.40.113.130:554/#video=h264
+webrtc:
+  ice_servers:
+  - urls:
+    - stun:stun.l.google.com:19302

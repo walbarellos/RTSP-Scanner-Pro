@@ -6,8 +6,9 @@ from datetime import datetime
 from .harvester import fetch_all_feeds
 from .probe import probe_ip, run_deep_probe
 
-MAX_WORKERS = 10
+MAX_WORKERS = 25
 CONNECT_TIMEOUT = 3.0
+RTSP_PORTS = [554, 8554, 5554, 10554]
 
 async def run_scan(archiver):
     if archiver.is_running: return
@@ -56,53 +57,49 @@ async def run_scan(archiver):
                 archiver.skip_requested = False
                 archiver.last_skipped_master = master
             
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
 
         await archiver.write_queue.put(None)
         await writer_task
     finally:
         archiver.is_running = False
 
-
-
 async def _worker(target_ip, rir, cc, archiver, semaphore):
-    async with archiver.active_tasks_lock:
-        self_id = archiver.active_tasks
-        archiver.active_tasks += 1
-    
-    try:
-        # Visual feedback: even if closed, tell the UI we are hitting it
-        if archiver.scanned_count % 5 == 0: # Throttle UI events to not flood
-            await archiver.broadcast({"event": "probing_active", "ip": target_ip, "cc": cc})
-
-        res = await probe_ip(target_ip, 554, CONNECT_TIMEOUT, rir, cc)
-        if res:
-            if res["status"] == "open":
-                await archiver.broadcast({"event": "found_hw", "ip": target_ip, "rir": rir, "cc": cc, "banner": res["banner"][:250]})
-                
-                async def on_success(ip, url, rir, cc, banner, vendor, meta):
-                    confirmed = await archiver.increment_confirmed()
-                    print(f"[HIT] {ip} | {vendor} | {meta['res']}")
-                    await archiver.broadcast({"event": "confirmed", "ip": ip, "url": url, "rir": rir, "cc": cc, "banner": banner, "vendor": vendor, **meta})
-                    await archiver.write_queue.put({"ip": ip, "working_url": url, "vendor": vendor, "update": True, **meta})
-
-                asyncio.create_task(run_deep_probe(
-                    target_ip, 554, rir, cc, res["banner"], archiver.executor, 
-                    archiver.swarm_memory, archiver.swarm_lock, archiver.SWARM_TTL, on_success
-                ))
-            
-            ts = datetime.utcnow().isoformat()
-            await archiver.write_queue.put({**res, "ts": ts})
-            
-        scanned = await archiver.increment_scanned()
-        # High frequency updates at start, then throttle
-        if scanned <= 20 or scanned % 10 == 0:
-            await archiver.broadcast({"event": "progress", "scanned": archiver.scanned_count, "confirmed": archiver.confirmed_count})
-        elif scanned % 50 == 0:
-            await archiver.broadcast({"event": "progress", "scanned": archiver.scanned_count, "confirmed": archiver.confirmed_count})
-    finally:
+    async with semaphore:
         async with archiver.active_tasks_lock:
-            archiver.active_tasks -= 1
+            archiver.active_tasks += 1
+        
+        try:
+            if archiver.scanned_count % 8 == 0:
+                await archiver.broadcast({"event": "probing_active", "ip": target_ip, "cc": cc})
+
+            for port in RTSP_PORTS:
+                res = await probe_ip(target_ip, port, CONNECT_TIMEOUT, rir, cc)
+                if res:
+                    if res["status"] == "open":
+                        await archiver.broadcast({"event": "found_hw", "ip": target_ip, "rir": rir, "cc": cc, "banner": res["banner"][:250]})
+                        
+                        async def on_success(ip, url, rir, cc, banner, vendor, meta):
+                            confirmed = await archiver.increment_confirmed()
+                            print(f"[HIT] {ip} | {vendor} | {meta['res']}")
+                            await archiver.broadcast({"event": "confirmed", "ip": ip, "url": url, "rir": rir, "cc": cc, "banner": banner, "vendor": vendor, **meta})
+                            await archiver.write_queue.put({"ip": ip, "working_url": url, "vendor": vendor, "update": True, **meta})
+
+                        asyncio.create_task(run_deep_probe(
+                            target_ip, port, rir, cc, res["banner"], archiver.executor, 
+                            archiver.swarm_memory, archiver.swarm_lock, archiver.SWARM_TTL, on_success
+                        ))
+                    
+                    ts = datetime.utcnow().isoformat()
+                    await archiver.write_queue.put({**res, "ts": ts})
+                    break 
+
+            await archiver.increment_scanned()
+            if archiver.scanned_count % 20 == 0:
+                await archiver.broadcast({"event": "progress", "scanned": archiver.scanned_count, "confirmed": archiver.confirmed_count})
+        finally:
+            async with archiver.active_tasks_lock:
+                archiver.active_tasks -= 1
 
 async def _scan_single_net(net_str, rir, cc, master, archiver, semaphore, skip_ips, force=False):
     if not force:
@@ -123,7 +120,6 @@ async def _scan_single_net(net_str, rir, cc, master, archiver, semaphore, skip_i
         
         for ip in hosts:
             if not archiver.is_running: return
-            # Only allow skip requested and manual check interruption for non-forced scans
             if not force and (archiver.skip_requested or not archiver.manual_queue.empty()):
                 return
             
@@ -131,13 +127,9 @@ async def _scan_single_net(net_str, rir, cc, master, archiver, semaphore, skip_i
             if not force and ip_s in skip_ips: continue
             
             asyncio.create_task(_worker(ip_s, rir, cc, archiver, semaphore))
-            if not force: skip_ips.add(ip_s) # Local cache update
+            if not force: skip_ips.add(ip_s)
             
-            # Pacing delay to prevent network/CPU spikes
-            await asyncio.sleep(0.1)
-            
-            # Manual jumps bypass this throttle loop
             if not force:
                 while archiver.active_tasks > MAX_WORKERS:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
     except: pass

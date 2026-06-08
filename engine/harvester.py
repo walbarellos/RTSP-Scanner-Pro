@@ -32,8 +32,9 @@ def fragment_network(net_str, target_prefix=20):
         return []
 
 async def fetch_all_feeds(broadcast_callback=None):
-    """Sync feeds from RIRs concurrently and yield targets as soon as each RIR is ready."""
+    """Sync feeds from all RIRs concurrently and yield a globally interleaved target list."""
     loop = asyncio.get_running_loop()
+    all_raw_networks = []
 
     def _parse_rir_content(rir, text):
         parsed = []
@@ -50,46 +51,54 @@ async def fetch_all_feeds(broadcast_callback=None):
                 prefix = max(0, min(32, prefix))
                 net_str = f"{p[3]}/{prefix}"
                 if not is_public_ip(p[3]): continue
-                priority = 10 if cc in HOT_CC or rir == "RIPE" else 1
+                # Balanced priority for RIPE (Europe), APNIC (Asia), LACNIC (Rest)
+                priority = 10 if cc in HOT_CC or rir in ["RIPE", "APNIC"] else 1
                 parsed.append((priority, rir, cc, net_str, net_str))
             except: continue
         return parsed
 
-    async def _fetch_and_compile_rir(rir, url):
+    async def _fetch_single_rir(rir, url):
         if broadcast_callback:
-            await broadcast_callback({"event": "status", "msg": f"Contacting {rir}..."})
+            await broadcast_callback({"event": "status", "msg": f"Synchronizing {rir}..."})
         try:
-            r = await loop.run_in_executor(None, lambda u=url: requests.get(u, timeout=12))
+            r = await loop.run_in_executor(None, lambda u=url: requests.get(u, timeout=15))
             if broadcast_callback:
-                await broadcast_callback({"event": "status", "msg": f"Compiling {rir} Targets..."})
-            
-            raw_nets = await loop.run_in_executor(None, _parse_rir_content, rir, r.text)
-            
-            def _compile_internal(nets):
-                fragged = []
-                for prio, rir_name, cc, net_str, master in nets:
-                    for f in fragment_network(net_str):
-                        fragged.append((prio, rir_name, cc, f, master))
-                random.shuffle(fragged)
-                fragged.sort(key=lambda x: x[0], reverse=True)
-                return fragged
-
-            return await loop.run_in_executor(None, _compile_internal, raw_nets)
+                await broadcast_callback({"event": "status", "msg": f"Ingesting {rir}..."})
+            return await loop.run_in_executor(None, _parse_rir_content, rir, r.text)
         except Exception as e:
             if broadcast_callback:
-                await broadcast_callback({"event": "status", "msg": f"{rir} skipped: {str(e)[:30]}"})
+                await broadcast_callback({"event": "status", "msg": f"{rir} deferred: {str(e)[:30]}"})
             return []
 
-    # Concurrent fetch using as_completed to yield as soon as the FASTEST RIR finishes
-    fetch_tasks = [asyncio.create_task(_fetch_and_compile_rir(rir, url)) for rir, url in FEEDS.items()]
+    # Parallel download of ALL feeds
+    tasks = [asyncio.create_task(_fetch_single_rir(rir, url)) for rir, url in FEEDS.items()]
+    results = await asyncio.gather(*tasks)
     
-    for task in asyncio.as_completed(fetch_tasks):
-        rir_targets = await task
-        for target in rir_targets:
-            yield target
+    for rir_nets in results:
+        all_raw_networks.extend(rir_nets)
 
     if broadcast_callback:
-        await broadcast_callback({"event": "status", "msg": "Intelligence deployment cycle complete."})
+        await broadcast_callback({"event": "status", "msg": "Interleaving Global Intelligence map..."})
+
+    def _compile_global(nets):
+        fragged = []
+        for prio, rir_name, cc, net_str, master in nets:
+            for f in fragment_network(net_str):
+                fragged.append((prio, rir_name, cc, f, master))
+        # Complete Global Shuffle: This is the key to break the regional trap
+        random.shuffle(fragged)
+        # Re-sort by priority but maintaining the shuffled order within the same priority
+        fragged.sort(key=lambda x: x[0], reverse=True)
+        return fragged
+
+    # Offload heavy fragmentation and global shuffle to executor to prevent "0 audited" hang
+    compiled_targets = await loop.run_in_executor(None, _compile_global, all_raw_networks)
+    
+    if broadcast_callback:
+        await broadcast_callback({"event": "status", "msg": f"Global Radar Active: {len(compiled_targets)} sectors mapped."})
+
+    for target in compiled_targets:
+        yield target
 
 
 

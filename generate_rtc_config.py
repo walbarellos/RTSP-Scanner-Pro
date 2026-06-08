@@ -12,31 +12,35 @@ def generate_config():
 
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
-    # Pega APENAS as câmeras favoritadas (Mission Book)
+    # Pega apenas as câmeras favoritadas (Mission Book)
     rows = con.execute("SELECT ip, cc, working_url, codec FROM results WHERE bookmarked=1").fetchall()
     con.close()
 
     if not rows:
-        print("[!] Nenhuma câmera favoritada encontrada. O Mission Wall estará vazio.")
+        print("[!] Nenhuma câmera favoritada encontrada. Mission Wall estará vazio.")
 
     streams = {}
     for r in rows:
         name = f"{r['cc']}_{r['ip'].replace('.', '_')}"
         url = r['working_url'] or f"rtsp://{r['ip']}:554/"
-        codec = (r['codec'] or "").upper()
+        codec = (r['codec'] or "h264").lower()
         
-        # if codec is H264 or HEVC, we can optionally force ffmpeg with GPU accel
-        # but passthrough is usually better. We will provide both options in the YAML.
-        if codec in ["H264", "HEVC"]:
-            streams[name] = [
-                url, # First choice: direct passthrough (zero transcode)
-                f"ffmpeg:{url}#video={codec.lower()}" # Second choice: GPU accelerated transcode if needed
-            ]
-        else:
-            streams[name] = [url]
+        # Dual source logic: direct and transcode
+        streams[name] = [
+            url,
+            f"ffmpeg:{url}#video={codec}"
+        ]
 
-    # Add ffmpeg hardware acceleration config
+    # COMPACT CONFIG FOR MAXIMUM COMPATIBILITY
     config = {
+        "api": {
+            "origin": "*" # Allow any origin (CORS fix)
+        },
+        "webrtc": {
+            "ice_servers": [
+                {"urls": ["stun:stun.l.google.com:19302"]}
+            ]
+        },
         "ffmpeg": {
             "bin": "ffmpeg",
             "global": "-hwaccel cuda -hwaccel_output_format cuda"
@@ -47,8 +51,8 @@ def generate_config():
     with open(config_file, "w") as f:
         yaml.dump(config, f, default_flow_style=False)
     
-    print(f"[+] {len(streams)} câmeras indexadas em {config_file}")
-    print("[!] Agora você pode rodar o binário do go2rtc nesta pasta.")
+    print(f"[+] {len(streams)} câmeras configuradas em {config_file}")
+    print("[!] REINICIE O GO2RTC PARA APLICAR AS MUDANÇAS.")
 
 if __name__ == "__main__":
     generate_config()

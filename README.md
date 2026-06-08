@@ -1,6 +1,6 @@
-# RTSP-Scanner-Pro 🛡️
+# RTSP-Scanner-Pro 🛡️ v8.8 (Modular)
 
-**A high-performance RTSP audit engine and interactive visualization dashboard.**
+**A high-performance, modular RTSP audit engine with GPU acceleration and global target interleaving.**
 
 ---
 
@@ -8,60 +8,65 @@
 
 **ESTE SOFTWARE É PARA FINS EXCLUSIVAMENTE EDUCACIONAIS E DE AUDITORIA DE SEGURANÇA AUTORIZADA.**
 
-O acesso não autorizado a sistemas de vigilância, câmeras privadas ou redes de terceiros **É UM CRIME GRAVE** em quase todas as jurisdições do planeta. 
-
-1. **INVASÃO DE DISPOSITIVO INFORMÁTICO:** Você pode ser processado criminalmente por acessar dispositivos sem autorização expressa.
-2. **VIOLAÇÃO DE PRIVACIDADE:** Capturar imagens de áreas privadas sem consentimento pode resultar em penas de prisão e multas astronômicas.
-3. **MONITORAMENTO PELAS AUTORIDADES:** Lembre-se, suas atividades deixam rastros. O uso deste software para atividades ilícitas colocará você diretamente no radar de unidades de crimes cibernéticos.
-
-**VOCÊ É O ÚNICO RESPONSÁVEL POR SUAS AÇÕES.** Se você usar esta ferramenta para fins maliciosos, não espere piedade da justiça. O desenvolvedor não se responsabiliza por danos, processos ou prisões decorrentes do uso indevido deste código.
+O acesso não autorizado a sistemas de vigilância, câmeras privadas ou redes de terceiros **É UM CRIME GRAVE**. O desenvolvedor não se responsabiliza por suas ações.
 
 ---
 
-## 🚀 Visão Geral
+## 🚀 Novidades da Versão 8.8 (Quantum-Jump Modular)
 
-O **RTSP-Scanner-Pro** é uma ferramenta avançada projetada para identificar e visualizar vulnerabilidades em feeds RTSP. Ele utiliza um motor de alta performance (Quantum-Jump) para escanear grandes faixas de IPs, identificar credenciais fracas e gerar um dashboard em tempo real com capturas de tela e geolocalização.
+O sistema foi totalmente refatorado para uma arquitetura de micro-módulos, garantindo estabilidade e performance extrema em hardwares modestos (i3/i5).
 
-### Funcionalidades Principais
-- **Motor Quantum-Jump:** Escaneamento paralelo massivo com baixo consumo de recursos.
-- **Dicionário de Credenciais:** Teste automatizado de usuários e senhas padrões de diversos fabricantes.
-- **Dashboard Interativo:** Interface moderna baseada em FastAPI para visualização de resultados.
-- **Captura Inteligente:** Extração automática de frames de streams ativos.
-- **Geolocalização:** Mapeamento de IPs para identificar a origem física dos dispositivos.
+### 🏗️ Arquitetura Modular (`engine/`)
+- **`harvester.py`**: Coletor inteligente de redes. Agora com **Global Interleave**, misturando alvos de todos os continentes (Europa, Ásia, Américas) desde o primeiro segundo.
+- **`orchestrator.py`**: O cérebro do sistema. Gerencia o fluxo de varredura com **Eco-Mode** (limite de 10-30 workers) e prioridade absoluta para comandos **JUMP**.
+- **`probe.py`**: Especialista em protocolos. Realiza handshakes RTSP, descoberta SDP e brute-force de credenciais padrão.
+- **`archiver.py`**: Central de inteligência. Gerencia o banco de dados SQLite, eventos SSE e sincronização automática de favoritos.
 
-## 🛠️ Instalação
+## 🚀 Funcionalidades de Elite
+
+- **Eco-Mode & Homeostase:** Proteção contra travamentos do PC. Configurado para baixo consumo de CPU e memória.
+- **True Global Shuffle:** Fim do monopólio regional. Varre o mundo inteiro de forma intercalada (França, Japão, Brasil, etc. aparecem misturados).
+- **Expansion Mode (WebRTC):** Integração com `go2rtc` para visualização de ultra-baixa latência usando a **GPU (CUDA/NVDEC)** para decodificação.
+- **Mission Wall:** Um dashboard focado apenas nos seus favoritos (★), otimizado para monitoramento de alvos confirmados.
+- **Favorites Sync:** Todos os favoritos são salvos automaticamente em `favorites.txt` na raiz para fácil acesso.
+
+## 🛠️ Instalação e Setup
 
 ### Pré-requisitos
 - Python 3.9+
-- FFmpeg (necessário para captura de frames)
+- FFmpeg
+- GPU NVIDIA (Opcional, para aceleração CUDA no Expansion Mode)
 
 ### Passo a Passo
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/seu-usuario/RTSP-Scanner-Pro.git
-    cd RTSP-Scanner-Pro
-    ```
-
-2.  **Instale as dependências:**
+1.  **Prepare o Ambiente:**
     ```bash
     pip install -r requirements.txt
     ```
 
-## ⚡ Como Usar
+2.  **Aumente os Limites do Sistema (Linux):**
+    O script `run.sh` já aplica `ulimit -n 65536` para evitar erros de "Too many open files".
 
-### Iniciando o Dashboard e o Scanner
-Para iniciar a interface web e o motor de auditoria, utilize o script de execução:
+3.  **Inicie o Sistema:**
+    ```bash
+    ./run.sh
+    ```
+    Acesse: `http://localhost:8000`
 
-```bash
-chmod +x run.sh
-./run.sh
-```
+### ⚡ Ativando o Modo Expansão (WebRTC)
 
-Acesse o dashboard em: `http://localhost:8000`
+Para visualizar seus favoritos com aceleração de GPU e sem os limites do navegador:
 
-### Configuração de Alvos
-Os alvos de scan podem ser configurados no arquivo `targets.txt` (conforme definido no `scanner_engine.py`).
+1.  **Gere a configuração:**
+    ```bash
+    python3 generate_rtc_config.py
+    ```
+2.  **Inicie o Proxy go2rtc:**
+    Baixe o binário do [go2rtc](https://github.com/AlexxIT/go2rtc) e execute-o na pasta raiz:
+    ```bash
+    ./go2rtc
+    ```
+3.  No dashboard, clique em **🚀 WEBRTC EXPANSION MODE**.
 
 ## 👨‍💻 Créditos
 
@@ -70,5 +75,4 @@ Desenvolvido e mantido por: **Willian Albarello**
 ---
 
 ## ⚖️ Licença
-
-Este projeto é distribuído apenas para fins de pesquisa. Consulte as leis locais antes de qualquer execução.
+Distribuído apenas para fins de pesquisa.

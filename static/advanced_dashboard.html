@@ -2,23 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RTSP ADVANCED · WEBRTC DASHBOARD</title>
+    <title>RTSP ADVANCED · MISSION WALL</title>
     <style>
         body { background: #020305; color: #00ff41; font-family: 'monospace'; margin: 0; padding: 20px; }
-        .header { border-bottom: 1px solid #1a2030; padding-bottom: 10px; margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 15px; }
-        .card { background: #080b10; border: 1px solid #1a2030; padding: 10px; }
+        .header { border-bottom: 1px solid #1a2030; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); gap: 20px; }
+        .card { background: #080b10; border: 1px solid #1a2030; padding: 15px; border-radius: 4px; }
         .card:hover { border-color: #00ff41; }
-        iframe { width: 100%; height: 250px; border: none; background: #000; }
-        .info { font-size: 0.8em; margin-top: 8px; color: #3a4a5a; }
-        .back-btn { color: #00d4ff; text-decoration: none; font-size: 0.9em; margin-bottom: 20px; display: inline-block; }
+        .video-container { width: 100%; height: 300px; background: #000; position: relative; overflow: hidden; }
+        iframe { width: 100%; height: 100%; border: none; }
+        .info { font-size: 0.85em; margin-top: 12px; color: #7a8a9a; display: flex; justify-content: space-between; }
+        .back-btn { color: #00d4ff; text-decoration: none; font-size: 0.9em; font-weight: bold; border: 1px solid #00d4ff; padding: 5px 10px; }
+        .status-tag { font-size: 0.7em; background: #1a2030; padding: 2px 6px; border-radius: 3px; }
+        .go2rtc-link { color: #ffd600; text-decoration: none; font-size: 0.8em; border-bottom: 1px dashed; }
     </style>
 </head>
 <body>
     <div class="header">
-        <a href="/static/index.html" class="back-btn">← BACK TO RECON DASHBOARD</a>
-        <h1>RTSP ADVANCED <span>WEBRTC MODE</span></h1>
-        <p>Powered by go2rtc · High Performance · Low Latency</p>
+        <div>
+            <h1>MISSION WALL <span>v8.8</span></h1>
+            <p style="font-size: 0.8em; color: #3a4a5a;">High Performance WebRTC/MSE Expansion</p>
+        </div>
+        <div style="text-align: right;">
+            <a href="/static/index.html" class="back-btn">← EXIT TO RECON</a><br><br>
+            <a href="http://127.0.0.1:1984" target="_blank" class="go2rtc-link">OPEN PROXY PANEL (INTERNAL)</a>
+        </div>
     </div>
     
     <div class="grid" id="webrtc-grid">
@@ -27,31 +35,42 @@
 
     <script>
         async function loadStreams() {
-            // Buscamos APENAS os favoritos (Mission Book)
-            const r = await fetch('/api/results?bookmarked=1');
-            const data = await r.json();
-            const grid = document.getElementById('webrtc-grid');
-            
-            if (data.length === 0) {
-                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 100px; color: #3a4a5a;">MISSION WALL EMPTY. PIN CAMERAS IN RECON DASHBOARD FIRST.</div>';
-                return;
-            }
-
-            data.forEach(d => {
-                const streamName = `${d.cc}_${d.ip.replace(/\./g, '_')}`;
-                // O go2rtc roda na porta 1984 por padrão
-                const rtcUrl = `http://${window.location.hostname}:1984/api/stream.html?src=${streamName}&mode=webrtc`;
+            try {
+                const r = await fetch('/api/results?bookmarked=1');
+                const data = await r.json();
+                const grid = document.getElementById('webrtc-grid');
                 
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <iframe src="${rtcUrl}"></iframe>
-                    <div class="info">
-                        <b>${d.ip}</b> | ${d.cc} | ${d.vendor || 'Generic'}
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
+                if (data.length === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 100px; color: #3a4a5a; letter-spacing: 5px;">MISSION WALL EMPTY. PIN CAMERAS IN RECON FIRST.</div>';
+                    return;
+                }
+
+                data.forEach(d => {
+                    const streamName = `${d.cc}_${d.ip.replace(/\./g, '_')}`;
+                    // We use MSE as primary and WebRTC as fallback via go2rtc's internal player logic
+                    // Adding "mse" and "webrtc" as preferred modes
+                    const rtcUrl = `http://${window.location.hostname}:1984/api/stream.html?src=${streamName}&mode=mse,webrtc`;
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <div class="video-container">
+                            <iframe src="${rtcUrl}"></iframe>
+                        </div>
+                        <div class="info">
+                            <div>
+                                <b style="color:#fff">${d.ip}</b> <span class="status-tag">${d.cc}</span>
+                            </div>
+                            <div style="font-size: 0.9em;">
+                                ${d.vendor || 'Generic'} · ${d.resolution || ''}
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
         loadStreams();
     </script>
